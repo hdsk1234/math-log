@@ -300,8 +300,11 @@ export const TextbookTracker: React.FC<Props> = ({ textbooks = [], isAdmin, onUp
              </div>
           )
         )}
+        
+      </div>
 
-        {/* Add New Book Card */}
+      <div className="grid grid-cols-1 gap-4 mt-4">
+      {/* Add New Book Card */}
         {isAdmin && !editingId && (
            <div className="bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl p-4 flex flex-col justify-center items-center gap-3 hover:bg-indigo-50/50 hover:border-indigo-200 transition-colors">
               <div className="w-full space-y-2">
