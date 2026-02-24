@@ -106,7 +106,7 @@ export const WeakPointList: React.FC<Props> = ({ weakPoints, isAdmin = false, on
                   </div>
               </div>
             );
-          }
+          } 
 
           return (
             <div key={idx} className="flex gap-3 items-start p-3 bg-orange-50/50 rounded-xl border border-orange-100 group relative transition-colors hover:bg-orange-50">
