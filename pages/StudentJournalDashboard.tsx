@@ -18,7 +18,7 @@ import { TextbookTracker } from '../components/TextbookTracker';
 import { UpcomingAssignments } from '../components/UpcomingAssignments';
 import { Card } from '../components/Card';
 import { 
-  GraduationCap, LogOut, Settings, ArrowLeft, Pencil, X, Edit2
+  GraduationCap, LogOut, Settings, ArrowLeft, Pencil, X, Edit2, Copy
 } from 'lucide-react';
 
 interface Props {
@@ -40,6 +40,9 @@ export const StudentJournalDashboard: React.FC<Props> = ({
 }) => {
   const isAdmin = currentUserRole === 'teacher';
 
+  // toastMessage State
+  const [toast, setToast] = useState<{ message: string; isVisible: boolean } | null>(null);
+  
   // --- Profile Editing State ---
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   const [editName, setEditName] = useState('');
@@ -111,6 +114,107 @@ export const StudentJournalDashboard: React.FC<Props> = ({
   }, [student.homework, student.profile.startDate]);
 
   // --- Handlers ---
+
+  const handleCopyReport = async () => {
+    if (!isAdmin) return;
+
+    const today = new Date();
+    const month = today.getMonth() + 1;
+    const dateStr = today.getDate();
+    const sessionCount = (student.lessonLogs?.length || 0) + 1;
+
+    // 1. 당월 과제 달성률 계산
+    const stats = {
+      wake_up: { total: 0, completed: 0 },
+      problem_30: { total: 0, completed: 0 },
+      explanation: { total: 0, completed: 0 }
+    };
+
+    today.setHours(0, 0, 0, 0);
+    const year = today.getFullYear();
+    const monthIndex = today.getMonth();
+    const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    const homework = student.homework || [];
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const currentDay = new Date(year, monthIndex, day);
+      if (currentDay > today) continue;
+      if (student.profile.startDate) {
+        const startDate = new Date(student.profile.startDate);
+        startDate.setHours(0,0,0,0);
+        if (currentDay < startDate) continue;
+      }
+
+      const formattedDateStr = `${currentDay.getFullYear()}-${String(currentDay.getMonth() + 1).padStart(2, '0')}-${String(currentDay.getDate()).padStart(2, '0')}`;
+      const homeworkRecord = homework.find(h => h.date === formattedDateStr);
+
+      (['wake_up', 'problem_30', 'explanation'] as const).forEach(type => {
+        stats[type].total += 1;
+        if (homeworkRecord?.tasks?.find(t => t.type === type)?.completed) {
+          stats[type].completed += 1;
+        }
+      });
+    }
+
+    const formatRate = (type: keyof typeof stats) => {
+      const { total, completed } = stats[type];
+      const percent = total === 0 ? 0 : Math.round((completed / total) * 100);
+      return `${percent}%(${completed}/${total})`;
+    };
+
+    // --- 추가/수정된 부분: 최근 수업 로그 가져오기 ---
+    const latestLog = student.lessonLogs && student.lessonLogs.length > 0 
+      ? student.lessonLogs[student.lessonLogs.length - 1] 
+      : null;
+    const lessonContent = latestLog?.content || '1. 내용을 입력해주세요.'; // LessonLog 타입의 실제 내용 속성명(content 등)에 맞게 수정 필요
+
+    // 2. 텍스트 포맷팅
+    let reportText = `${month}월 ${dateStr}일 (${sessionCount}회차) 수업 내용 및 과제 안내드립니다!\n\n`;
+    reportText += `❗ 과제1: 기상인증 성공률: ${formatRate('wake_up')}\n`;
+    reportText += `❗ 과제2: 30문제 풀이 성공률: ${formatRate('problem_30')}\n`;
+    reportText += `❗ 과제3: 1일 1제 해설 작성 성공률: ${formatRate('explanation')}\n\n`;
+
+    // --- 추가/수정된 부분: 수업 진행 내용 반영 ---
+    reportText += `✅ 수업 진행 내용\n${lessonContent}\n\n`;
+    reportText += `✅ 숙제\n`;
+
+    // 숙제를 카테고리별로 그룹화
+    const categoryMap: Record<string, string[]> = {};
+    student.upcomingAssignments?.schedules?.forEach(schedule => {
+      schedule.categories.forEach(category => {
+        if (!categoryMap[category.title]) categoryMap[category.title] = [];
+        category.items.forEach(item => {
+          categoryMap[category.title].push(`${schedule.date} ${item.text}`);
+        });
+      });
+    });
+
+    Object.entries(categoryMap).forEach(([title, items]) => {
+      reportText += `${title}\n`;
+      items.forEach(item => {
+        reportText += `${item}\n`;
+      });
+      reportText += `\n`;
+    });
+
+    // 3. 클립보드 복사 및 Toast 알림
+    try {
+      await navigator.clipboard.writeText(reportText.trim());
+      setToast({ message: '수업 일지 양식이 클립보드에 복사되었습니다.', isVisible: true });
+      
+      // 2.5초 후 서서히 사라짐 (opacity: 0)
+      setTimeout(() => setToast(prev => prev ? { ...prev, isVisible: false } : null), 2500);
+      // 3초 후 완전히 DOM에서 제거
+      setTimeout(() => setToast(null), 3000);
+      
+    } catch (err) {
+      console.error('복사 실패:', err);
+      setToast({ message: '복사에 실패했습니다.', isVisible: true });
+      
+      setTimeout(() => setToast(prev => prev ? { ...prev, isVisible: false } : null), 2500);
+      setTimeout(() => setToast(null), 3000);
+    }
+  };
 
   const startEditingProfile = () => {
     setEditName(student.profile.name);
@@ -416,6 +520,16 @@ export const StudentJournalDashboard: React.FC<Props> = ({
       </header>
 
       <main className="max-w-4xl mx-auto p-4 space-y-6">
+        {/* Toast Notification UI */}
+      {toast && (
+        <div 
+          className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-[100] transition-opacity duration-500 ease-in-out ${
+            toast.isVisible ? 'opacity-100' : 'opacity-0'
+          }`}
+        >
+          {toast.message}
+        </div>
+      )}
         {/* Profile Card */}
         <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
           {/* Decorative element */}
@@ -428,12 +542,21 @@ export const StudentJournalDashboard: React.FC<Props> = ({
                 <h2 className="text-3xl font-black mt-1">{student.profile.name}</h2>
               </div>
               {isAdmin && (
-                <button 
-                  onClick={startEditingProfile}
-                  className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm"
-                >
-                  <Settings size={20} />
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={handleCopyReport}
+                    className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm flex items-center gap-1"
+                    title="수업/과제 양식 복사"
+                  >
+                    <Copy size={20} />
+                  </button>
+                  <button 
+                    onClick={startEditingProfile}
+                    className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm"
+                  >
+                    <Settings size={20} />
+                  </button>
+                </div>
               )}
             </div>
 
