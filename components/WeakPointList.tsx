@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { WeakPoint } from '../types';
 import { Card } from './Card';
@@ -117,7 +116,8 @@ export const WeakPointList: React.FC<Props> = ({ weakPoints, isAdmin = false, on
                   <span className="font-bold text-gray-800 text-sm truncate">{wp.category}</span>
                   {wp.severity === 'high' && <span className="text-[10px] bg-red-100 text-red-600 px-1.5 py-0.5 rounded font-bold whitespace-nowrap">심각</span>}
                 </div>
-                <p className="text-sm text-gray-600 leading-snug break-words">{wp.description}</p>
+                {/* whitespace-pre-wrap 클래스 추가됨 */}
+                <p className="text-sm text-gray-600 leading-snug break-words whitespace-pre-wrap">{wp.description}</p>
               </div>
               
               {isAdmin && (
