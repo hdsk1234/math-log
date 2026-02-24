@@ -11,7 +11,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: npm run build
+      
+      # 1. 의존성 설치 단계 추가 (플랫폼 호환성을 위해 install 사용)
+      - name: Install dependencies
+        run: npm install
+
+      # 2. 빌드 실행
+      - name: Build project
+        run: npm run build
+        
       - uses: FirebaseExtended/action-hosting-deploy@v0
         with:
           repoToken: ${{ secrets.GITHUB_TOKEN }}
