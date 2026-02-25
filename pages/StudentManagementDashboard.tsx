@@ -27,18 +27,18 @@ export const StudentManagementDashboard: React.FC<Props> = ({
   const handleCopyFormat = async () => {
     const today = new Date();
     const currentDay = today.getDay(); // 0: 일요일 ~ 6: 토요일
-    
+
     // 헤더용 이번 주 일요일~토요일 범위 계산
     const weekStart = new Date(today);
     weekStart.setDate(today.getDate() - currentDay);
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
-    
+
     const dateRangeStr = `${weekStart.getMonth() + 1}월 ${weekStart.getDate()}일 ~ ${weekEnd.getMonth() + 1}월 ${weekEnd.getDate()}일`;
     const todayLabel = `${today.getMonth() + 1}월 ${today.getDate()}일`;
 
     const header = `❗과제 체크 표(${dateRangeStr})\n\n[기상/30문제/해설] ${todayLabel}\n\n`;
-    
+
     // 가장 가까운 과거의 일요일부터 어제까지의 날짜 배열 생성
     const daysToFetch = currentDay === 0 ? 7 : currentDay;
     const fetchDates = Array.from({ length: daysToFetch }).map((_, i) => {
@@ -47,12 +47,16 @@ export const StudentManagementDashboard: React.FC<Props> = ({
       return d.toISOString().split('T')[0];
     });
 
-    const body = students.map(student => {
-      // 학생의 과외 시작일 기준값 설정
+    // 학생 배열을 복사한 뒤 이름 기준 가나다순 정렬
+    const sortedStudents = [...students].sort((a, b) => 
+      a.profile.name.localeCompare(b.profile.name)
+    );
+
+    const body = sortedStudents.map(student => {
       const startDateObj = new Date(student.profile.startDate);
       startDateObj.setHours(0, 0, 0, 0);
 
-      const getFormattedStatus = (type: HomeworkType) => {
+      const getFormattedStatus = (type: HomeworkType, isCountBased: boolean = false) => {
         const rawStatus = fetchDates.map(dateStr => {
           const currentDateObj = new Date(dateStr);
           currentDateObj.setHours(0, 0, 0, 0);
@@ -65,23 +69,29 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           // 2. 시작일 이후 데이터 확인
           const daily = student.homework?.find(h => h.date === dateStr);
           const task = daily?.tasks?.find(t => t.type === type);
-          
-          // 3. 과제가 달성된 경우 o, 그 외(데이터 없음, 미완료)는 x
-          if (task?.completed) {
-            return 'o';
+
+          // 3. 개수 기반(해설) vs 달성 여부 기반(기상, 30문제) 분기 처리
+          if (isCountBased) {
+            const count = task?.count || 0;
+            return count.toString();
+          } else {
+            if (task?.completed) {
+              return 'o';
+            }
+            return 'x';
           }
-          return 'x';
         }).join('');
-        
+
         // 3일치 이후 띄어쓰기 적용
-        return rawStatus.length > 3 
-          ? `${rawStatus.slice(0, 3)} ${rawStatus.slice(3)}` 
+        return rawStatus.length > 3
+          ? `${rawStatus.slice(0, 3)} ${rawStatus.slice(3)}`
           : rawStatus;
       };
 
       const wakeup = getFormattedStatus('wake_up');
       const problem = getFormattedStatus('problem_30');
-      const explanation = getFormattedStatus('explanation');
+      // 해설 칸은 개수 기반 모드(true)로 호출
+      const explanation = getFormattedStatus('explanation', true);
 
       return `*${student.profile.name}: \t ${wakeup} / ${problem} / ${explanation}`;
     }).join('\n');
@@ -106,25 +116,23 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               <GraduationCap className="text-indigo-600" size={24} />
               <h1 className="text-xl font-extrabold text-gray-900 tracking-tight hidden md:block">Math Tutor Admin</h1>
             </div>
-            
+
             <div className="flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode('list')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                  viewMode === 'list' 
-                    ? 'bg-white text-gray-900 shadow-sm' 
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'list'
+                    ? 'bg-white text-gray-900 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
-                }`}
+                  }`}
               >
                 <List size={14} /> 학생 관리
               </button>
               <button
                 onClick={() => setViewMode('quick')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${
-                  viewMode === 'quick' 
-                    ? 'bg-white text-indigo-600 shadow-sm' 
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'quick'
+                    ? 'bg-white text-indigo-600 shadow-sm'
                     : 'text-gray-500 hover:text-gray-700'
-                }`}
+                  }`}
               >
                 <Zap size={14} /> 빠른 기록
               </button>
@@ -139,7 +147,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
             >
               <Copy size={16} /> 과제 체크 양식 복사
             </button>
-            <button 
+            <button
               onClick={onLogout}
               className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
               title="로그아웃"
@@ -151,24 +159,23 @@ export const StudentManagementDashboard: React.FC<Props> = ({
       </header>
 
       {viewMode === 'list' ? (
-        <StudentList 
-          students={students} 
-          onSelectStudent={onSelectStudent} 
+        <StudentList
+          students={students}
+          onSelectStudent={onSelectStudent}
           onAddStudent={onAddStudent}
           onUpdateStudent={onUpdateStudent}
           onDeleteStudent={onDeleteStudent}
         />
       ) : (
-        <QuickUpdateDashboard 
+        <QuickUpdateDashboard
           students={students}
           onUpdateStudent={onUpdateStudent}
         />
       )}
 
-      <div 
-        className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg transition-opacity duration-500 z-50 ${
-          showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'
-        }`}
+      <div
+        className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg transition-opacity duration-500 z-50 ${showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
       >
         과제 체크 양식이 클립보드에 복사되었습니다
       </div>

@@ -7,9 +7,8 @@ export interface DailyHomework {
   tasks: {
     type: HomeworkType;
     completed: boolean;
+    count?: number;
   }[];
-  hasLesson?: boolean;
-  note?: string; // Daily memo/specific homework text
 }
 
 export interface UnitMastery {
