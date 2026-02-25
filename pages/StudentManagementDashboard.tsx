@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { StudentData } from '../types';
+import { StudentData, HomeworkType } from '../types';
 import { StudentList } from '../components/StudentList';
 import { QuickUpdateDashboard } from '../components/QuickUpdateDashboard';
-import { GraduationCap, LogOut, List, Zap } from 'lucide-react';
+import { GraduationCap, LogOut, List, Zap, Copy } from 'lucide-react';
 
 interface Props {
   students: StudentData[];
@@ -22,9 +22,83 @@ export const StudentManagementDashboard: React.FC<Props> = ({
   onLogout,
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'quick'>('list');
+  const [showToast, setShowToast] = useState(false);
+
+  const handleCopyFormat = async () => {
+    const today = new Date();
+    const currentDay = today.getDay(); // 0: 일요일 ~ 6: 토요일
+    
+    // 헤더용 이번 주 일요일~토요일 범위 계산
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - currentDay);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+    
+    const dateRangeStr = `${weekStart.getMonth() + 1}월 ${weekStart.getDate()}일 ~ ${weekEnd.getMonth() + 1}월 ${weekEnd.getDate()}일`;
+    const todayLabel = `${today.getMonth() + 1}월 ${today.getDate()}일`;
+
+    const header = `❗과제 체크 표(${dateRangeStr})\n\n[기상/30문제/해설] ${todayLabel}\n\n`;
+    
+    // 가장 가까운 과거의 일요일부터 어제까지의 날짜 배열 생성
+    const daysToFetch = currentDay === 0 ? 7 : currentDay;
+    const fetchDates = Array.from({ length: daysToFetch }).map((_, i) => {
+      const d = new Date(today);
+      d.setDate(today.getDate() - daysToFetch + i);
+      return d.toISOString().split('T')[0];
+    });
+
+    const body = students.map(student => {
+      // 학생의 과외 시작일 기준값 설정
+      const startDateObj = new Date(student.profile.startDate);
+      startDateObj.setHours(0, 0, 0, 0);
+
+      const getFormattedStatus = (type: HomeworkType) => {
+        const rawStatus = fetchDates.map(dateStr => {
+          const currentDateObj = new Date(dateStr);
+          currentDateObj.setHours(0, 0, 0, 0);
+
+          // 1. 과외 시작일 이전인 경우
+          if (currentDateObj < startDateObj) {
+            return '_';
+          }
+
+          // 2. 시작일 이후 데이터 확인
+          const daily = student.homework?.find(h => h.date === dateStr);
+          const task = daily?.tasks?.find(t => t.type === type);
+          
+          // 3. 과제가 달성된 경우 o, 그 외(데이터 없음, 미완료)는 x
+          if (task?.completed) {
+            return 'o';
+          }
+          return 'x';
+        }).join('');
+        
+        // 3일치 이후 띄어쓰기 적용
+        return rawStatus.length > 3 
+          ? `${rawStatus.slice(0, 3)} ${rawStatus.slice(3)}` 
+          : rawStatus;
+      };
+
+      const wakeup = getFormattedStatus('wake_up');
+      const problem = getFormattedStatus('problem_30');
+      const explanation = getFormattedStatus('explanation');
+
+      return `*${student.profile.name}: \t ${wakeup} / ${problem} / ${explanation}`;
+    }).join('\n');
+
+    const fullText = header + body;
+
+    try {
+      await navigator.clipboard.writeText(fullText);
+      setShowToast(true);
+      setTimeout(() => setShowToast(false), 3000);
+    } catch (err) {
+      console.error('클립보드 복사 실패:', err);
+    }
+  };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10">
+    <div className="min-h-screen bg-gray-50 pb-10 relative">
       <header className="bg-white px-6 py-4 border-b border-gray-100 sticky top-0 z-50">
         <div className="flex justify-between items-center max-w-4xl mx-auto">
           <div className="flex items-center gap-4">
@@ -33,7 +107,6 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               <h1 className="text-xl font-extrabold text-gray-900 tracking-tight hidden md:block">Math Tutor Admin</h1>
             </div>
             
-            {/* View Mode Toggle */}
             <div className="flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode('list')}
@@ -59,6 +132,13 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={handleCopyFormat}
+              className="flex items-center gap-1 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-md transition-colors"
+              title="과제 체크 양식 복사"
+            >
+              <Copy size={16} /> 과제 체크 양식 복사
+            </button>
             <button 
               onClick={onLogout}
               className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -84,6 +164,14 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           onUpdateStudent={onUpdateStudent}
         />
       )}
+
+      <div 
+        className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg transition-opacity duration-500 z-50 ${
+          showToast ? 'opacity-100' : 'opacity-0 pointer-events-none'
+        }`}
+      >
+        과제 체크 양식이 클립보드에 복사되었습니다
+      </div>
     </div>
   );
 };
