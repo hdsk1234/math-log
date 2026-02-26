@@ -35,7 +35,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
     weekEnd.setDate(weekStart.getDate() + 6);
 
     const dateRangeStr = `${weekStart.getMonth() + 1}월 ${weekStart.getDate()}일 ~ ${weekEnd.getMonth() + 1}월 ${weekEnd.getDate()}일`;
-    const todayLabel = `${today.getMonth() + 1}월 ${today.getDate()}일`;
+    const todayLabel = `${today.getMonth() + 1}월 ${today.getDate()-1}일`;
 
     const header = `❗과제 체크 표(${dateRangeStr})\n\n[기상/30문제/해설] ${todayLabel}\n\n`;
 
