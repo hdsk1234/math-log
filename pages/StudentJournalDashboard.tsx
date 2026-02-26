@@ -121,7 +121,7 @@ export const StudentJournalDashboard: React.FC<Props> = ({
     const today = new Date();
     const month = today.getMonth() + 1;
     const dateStr = today.getDate();
-    const sessionCount = (student.lessonLogs?.length || 0) + 1;
+    const sessionCount = (student.lessonLogs?.length || 0);
 
     // 1. 당월 과제 달성률 계산
     const stats = {
