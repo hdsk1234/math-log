@@ -115,7 +115,7 @@ export const StudentJournalDashboard: React.FC<Props> = ({
 
   // --- Handlers ---
 
-  const handleCopyReport = async () => {
+const handleCopyReport = async () => {
     if (!isAdmin) return;
 
     const today = new Date();
@@ -162,11 +162,10 @@ export const StudentJournalDashboard: React.FC<Props> = ({
       return `${percent}%(${completed}/${total})`;
     };
 
-    // --- 추가/수정된 부분: 최근 수업 로그 가져오기 ---
     const latestLog = student.lessonLogs && student.lessonLogs.length > 0 
       ? student.lessonLogs[student.lessonLogs.length - 1] 
       : null;
-    const lessonContent = latestLog?.content || '1. 내용을 입력해주세요.'; // LessonLog 타입의 실제 내용 속성명(content 등)에 맞게 수정 필요
+    const lessonContent = latestLog?.content || '1. 내용을 입력해주세요.';
 
     // 2. 텍스트 포맷팅
     let reportText = `${month}월 ${dateStr}일 (${sessionCount}회차) 수업 내용 및 과제 안내드립니다!\n\n`;
@@ -174,17 +173,33 @@ export const StudentJournalDashboard: React.FC<Props> = ({
     reportText += `❗ 과제2: 30문제 풀이 성공률: ${formatRate('problem_30')}\n`;
     reportText += `❗ 과제3: 1일 1제 해설 작성 성공률: ${formatRate('explanation')}\n\n`;
 
-    // --- 추가/수정된 부분: 수업 진행 내용 반영 ---
     reportText += `✅ 수업 진행 내용\n${lessonContent}\n\n`;
     reportText += `✅ 숙제\n`;
 
-    // 숙제를 카테고리별로 그룹화
+    // 날짜(M/D)에 요일을 추가하는 헬퍼 함수
+    const getDateWithDay = (dateString: string) => {
+      const parts = dateString.split('/');
+      if (parts.length === 2) {
+        const m = parseInt(parts[0], 10);
+        const d = parseInt(parts[1], 10);
+        if (!isNaN(m) && !isNaN(d)) {
+          const currentYear = new Date().getFullYear();
+          const targetDate = new Date(currentYear, m - 1, d);
+          const days = ['일', '월', '화', '수', '목', '금', '토'];
+          return `${dateString}(${days[targetDate.getDay()]})`;
+        }
+      }
+      return dateString;
+    };
+
+    // 숙제를 카테고리별로 그룹화 (요일 포함 적용)
     const categoryMap: Record<string, string[]> = {};
     student.upcomingAssignments?.schedules?.forEach(schedule => {
+      const dateWithDay = getDateWithDay(schedule.date);
       schedule.categories.forEach(category => {
         if (!categoryMap[category.title]) categoryMap[category.title] = [];
         category.items.forEach(item => {
-          categoryMap[category.title].push(`${schedule.date} ${item.text}`);
+          categoryMap[category.title].push(`${dateWithDay} ${item.text}`);
         });
       });
     });
@@ -202,9 +217,7 @@ export const StudentJournalDashboard: React.FC<Props> = ({
       await navigator.clipboard.writeText(reportText.trim());
       setToast({ message: '수업 일지 양식이 클립보드에 복사되었습니다.', isVisible: true });
       
-      // 2.5초 후 서서히 사라짐 (opacity: 0)
       setTimeout(() => setToast(prev => prev ? { ...prev, isVisible: false } : null), 2500);
-      // 3초 후 완전히 DOM에서 제거
       setTimeout(() => setToast(null), 3000);
       
     } catch (err) {
