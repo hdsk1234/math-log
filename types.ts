@@ -4,6 +4,8 @@ export type UserRole = 'guest' | 'student' | 'teacher';
 
 export interface DailyHomework {
   date: string; // YYYY-MM-DD
+  hasLesson?: boolean; 
+  note?: string;       
   tasks: {
     type: HomeworkType;
     completed: boolean;
