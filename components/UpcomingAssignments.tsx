@@ -27,7 +27,7 @@ const AssignmentItem: React.FC<{
 }> = ({ value, isAdmin, onSave, onDelete, isPast }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [localValue, setLocalValue] = useState(value);
-  
+
   // Undo/Redo History State
   const [history, setHistory] = useState<string[]>([value]);
   const [historyIndex, setHistoryIndex] = useState(0);
@@ -127,8 +127,8 @@ const AssignmentItem: React.FC<{
     return (
       <div className="bg-white border-2 border-indigo-200 rounded-lg p-2 shadow-sm animate-in fade-in zoom-in-95 duration-200">
         <div className="grid relative w-full mb-2">
-           {/* Invisible element to set size */}
-           <div className="col-start-1 row-start-1 invisible whitespace-pre-wrap break-all text-sm leading-snug font-sans px-1">
+          {/* Invisible element to set size */}
+          <div className="col-start-1 row-start-1 invisible whitespace-pre-wrap break-all text-sm leading-snug font-sans px-1">
             {localValue || ' '}
           </div>
           <textarea
@@ -142,17 +142,17 @@ const AssignmentItem: React.FC<{
         </div>
         <div className="flex justify-between items-center border-t border-gray-100 pt-2 mt-1">
           <div className="text-[10px] text-gray-400 flex items-center gap-2">
-             <span>실행취소: Ctrl+Z</span>
-             {historyIndex > 0 && <RotateCcw size={10} className="text-gray-400" />}
+            <span>실행취소: Ctrl+Z</span>
+            {historyIndex > 0 && <RotateCcw size={10} className="text-gray-400" />}
           </div>
           <div className="flex gap-1">
-            <button 
+            <button
               onClick={cancelEditing}
               className="px-2 py-1 text-xs text-gray-500 hover:bg-gray-100 rounded font-bold"
             >
               취소
             </button>
-            <button 
+            <button
               onClick={handleSave}
               className="px-2 py-1 text-xs bg-indigo-600 text-white hover:bg-indigo-700 rounded font-bold flex items-center gap-1"
             >
@@ -169,17 +169,17 @@ const AssignmentItem: React.FC<{
       <span className={`text-sm leading-snug whitespace-pre-wrap break-all py-0.5 ${isPast ? 'text-gray-400 line-through' : 'text-gray-700'}`}>
         {value}
       </span>
-      
+
       {isAdmin && (
         <div className="flex items-center gap-1 opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0 bg-white/80 backdrop-blur-sm rounded">
-          <button 
+          <button
             onClick={startEditing}
             className="text-gray-400 hover:text-indigo-600 p-1 rounded hover:bg-indigo-50 transition-colors"
             title="수정"
           >
             <Pencil size={14} />
           </button>
-          <button 
+          <button
             onClick={() => {
               if (window.confirm('이 항목을 삭제하시겠습니까?')) {
                 onDelete();
@@ -196,8 +196,8 @@ const AssignmentItem: React.FC<{
   );
 };
 
-export const UpcomingAssignments: React.FC<Props> = ({ 
-  data, 
+export const UpcomingAssignments: React.FC<Props> = ({
+  data,
   isAdmin,
   onAddSchedule,
   onDeleteSchedule,
@@ -234,34 +234,60 @@ export const UpcomingAssignments: React.FC<Props> = ({
   // Helper to check if a schedule date is in the past
   const isDatePast = (dateStr: string) => {
     const today = new Date();
-    today.setHours(0,0,0,0);
-    
+    today.setHours(0, 0, 0, 0);
+
     const parts = dateStr.split('/');
     if (parts.length !== 2) return false;
-    
+
     const m = parseInt(parts[0]);
     const d = parseInt(parts[1]);
     let y = today.getFullYear();
 
     if (m >= 11 && today.getMonth() <= 1) {
-       y--;
+      y--;
     }
     if (today.getMonth() >= 10 && m <= 2) {
-       y++;
+      y++;
     }
 
     const targetDate = new Date(y, m - 1, d);
     return targetDate < today;
   };
 
+  const getDayOfWeek = (dateStr: string) => {
+    const parts = dateStr.split('/');
+    if (parts.length !== 2) return '';
+
+    const m = parseInt(parts[0]);
+    const d = parseInt(parts[1]);
+    const today = new Date();
+    let y = today.getFullYear();
+
+    if (m >= 11 && today.getMonth() <= 1) y--;
+    if (today.getMonth() >= 10 && m <= 2) y++;
+
+    const targetDate = new Date(y, m - 1, d);
+    const days = ['일', '월', '화', '수', '목', '금', '토'];
+
+    return days[targetDate.getDay()];
+  };
+
+  const getDayColor = (dateStr: string, isPast: boolean) => {
+    if (isPast) return 'text-gray-400';
+    const day = getDayOfWeek(dateStr);
+    if (day === '일') return 'text-red-500';
+    if (day === '토') return 'text-blue-500';
+    return 'text-gray-500';
+  };
+
   // Helper for Date Input Conversion (M/D -> YYYY-MM-DD)
   const getIsoDate = (dateStr: string) => {
     const currentYear = new Date().getFullYear();
     if (!dateStr || !dateStr.includes('/')) return new Date().toISOString().split('T')[0];
-    
+
     const [m, d] = dateStr.split('/').map(Number);
     if (isNaN(m) || isNaN(d)) return new Date().toISOString().split('T')[0];
-    
+
     return `${currentYear}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
   };
 
@@ -274,8 +300,8 @@ export const UpcomingAssignments: React.FC<Props> = ({
   };
 
   return (
-    <Card 
-      title="다음 수업 과제" 
+    <Card
+      title="다음 수업 과제"
       icon={<Pencil className="text-indigo-600" size={20} />}
       className="border-indigo-100 ring-4 ring-indigo-50/50"
     >
@@ -290,20 +316,28 @@ export const UpcomingAssignments: React.FC<Props> = ({
                 {/* Date Column */}
                 <div className="flex-shrink-0 w-14 pt-1 flex flex-col items-center gap-1">
                   <div className={`relative rounded-lg py-1 px-1 w-full text-center transition-colors ${isPast ? 'bg-gray-100' : 'bg-gray-100 group-hover/schedule:bg-indigo-50'}`}>
-                    
+
                     {/* Visual Display (Always visible) */}
-                    <div>
-                      <span className={`block text-xs font-bold ${isPast ? 'text-gray-400' : 'text-gray-500'}`}>
-                        {schedule.date.includes('/') ? schedule.date.split('/')[0] + '월' : '날짜'}
+                    <div className="flex flex-col items-center py-1">
+                      {/* 월 표시 (작게) */}
+                      <span className={`text-[10px] font-bold leading-none mb-0.5 ${isPast ? 'text-gray-400' : 'text-indigo-600/70'}`}>
+                        {schedule.date.includes('/') ? `${schedule.date.split('/')[0]}월` : ''}
                       </span>
-                      <span className={`block text-lg font-extrabold leading-none ${isPast ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+
+                      {/* 일 숫자 (크고 굵게) */}
+                      <span className={`text-xl font-black tracking-tighter leading-none ${isPast ? 'text-gray-400' : 'text-gray-800'}`}>
                         {schedule.date.includes('/') ? schedule.date.split('/')[1] : schedule.date}
+                      </span>
+
+                      {/* 요일 표시 */}
+                      <span className={`text-[11px] font-bold mt-0.5 ${getDayColor(schedule.date, isPast)}`}>
+                        {schedule.date.includes('/') ? getDayOfWeek(schedule.date) : ''}
                       </span>
                     </div>
 
                     {/* Invisible Date Input for Admin */}
                     {isAdmin && (
-                      <input 
+                      <input
                         type="date"
                         value={getIsoDate(schedule.date)}
                         onChange={(e) => handleDateChange(sIdx, e.target.value)}
@@ -312,9 +346,9 @@ export const UpcomingAssignments: React.FC<Props> = ({
                       />
                     )}
                   </div>
-                  
+
                   {isAdmin && (
-                    <button 
+                    <button
                       onClick={() => {
                         if (window.confirm('정말 이 과제 일정을 삭제하시겠습니까?')) {
                           onDeleteSchedule && onDeleteSchedule(sIdx);
@@ -338,7 +372,7 @@ export const UpcomingAssignments: React.FC<Props> = ({
                           {category.title.replace(/[\[\]]/g, '')}
                         </span>
                         {isAdmin && (
-                          <button 
+                          <button
                             onClick={() => onAddItem && onAddItem(sIdx, cIdx)}
                             className="p-0.5 rounded bg-gray-100 text-gray-500 hover:bg-indigo-100 hover:text-indigo-600 transition-colors"
                             title="항목 추가"
@@ -347,12 +381,12 @@ export const UpcomingAssignments: React.FC<Props> = ({
                           </button>
                         )}
                       </div>
-                      
+
                       {category.items.length > 0 ? (
                         <ul className="space-y-1 pl-1">
                           {category.items.map((item, iIdx) => (
                             <li key={iIdx} className="relative pl-2 border-l-2 border-gray-100 hover:border-indigo-200 transition-colors mb-1 last:mb-0">
-                              <AssignmentItem 
+                              <AssignmentItem
                                 value={item.text}
                                 isAdmin={isAdmin}
                                 onSave={(text) => onUpdateItem && onUpdateItem(sIdx, cIdx, iIdx, text)}
@@ -374,7 +408,7 @@ export const UpcomingAssignments: React.FC<Props> = ({
 
           {/* Add New Schedule Button */}
           {isAdmin && (
-            <button 
+            <button
               onClick={onAddSchedule}
               className="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-gray-400 font-bold text-sm hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
             >
@@ -395,7 +429,7 @@ export const UpcomingAssignments: React.FC<Props> = ({
                   <span key={idx} className="bg-white text-amber-900 text-xs px-2 py-1 rounded shadow-sm border border-amber-100 flex items-center gap-1 group">
                     {item}
                     {isAdmin && (
-                      <button 
+                      <button
                         onClick={() => onDeleteMaterial && onDeleteMaterial(idx)}
                         className="text-amber-300 hover:text-red-500"
                       >
@@ -406,8 +440,8 @@ export const UpcomingAssignments: React.FC<Props> = ({
                 ))}
                 {isAdmin && (
                   <form onSubmit={handleMaterialSubmit} className="flex gap-1">
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={newMaterial}
                       onChange={(e) => setNewMaterial(e.target.value)}
                       placeholder="준비물 추가"
