@@ -39,13 +39,18 @@ export interface ComparisonData {
   average: number;
 }
 
+export interface Range {
+  start: number;
+  end: number;
+}
+
 export interface Textbook {
   id: string;
-  title: string; // e.g. "쎈 수학 I"
-  subject?: string; // e.g. "수학 I"
-  coverImage?: string; // Image URL
-  currentStep: number; // e.g. 50 (pages or chapters)
-  totalSteps: number; // e.g. 200
+  title: string;
+  subject: string;
+  coverImage: string;
+  totalSteps: number;
+  completedRanges: Range[]; // currentStep 대체
   status: 'active' | 'completed' | 'paused';
 }
 
