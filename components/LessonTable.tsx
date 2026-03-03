@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { LessonLog } from '../types';
 import { Card } from './Card';
@@ -31,15 +30,12 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
 
   // Update next session number when logs change
   useEffect(() => {
-    // Calculate next session based on max session number found in logs
     const maxSession = logs.reduce((max, log) => Math.max(max, log.session || 0), 0);
     setNewSession(maxSession + 1);
   }, [logs]);
 
   const handleSubmit = () => {
-    // Allow empty content
     if (onAdd && newDate) {
-      // Convert YYYY-MM-DD to MM.DD format to match existing data style
       const [y, m, d] = newDate.split('-');
       const formattedDate = `${m}.${d}`;
 
@@ -53,7 +49,6 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
       setNewDate('');
       setNewContent('');
       setNewRating(5);
-      // newSession will be updated via useEffect
     }
   };
 
@@ -61,21 +56,16 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
     setEditingIndex(index);
     setEditSession(log.session || 0);
     
-    // Convert display format to input format (YYYY-MM-DD)
     let isoDate = '';
     if (log.date) {
-        // Try to parse typical formats
         if (log.date.includes('-') && log.date.length === 10) {
-            // YYYY-MM-DD
             isoDate = log.date;
         } else if (log.date.includes('.')) {
             const parts = log.date.split('.');
             const today = new Date();
             if (parts.length === 2) {
-                // MM.DD -> YYYY-MM-DD (Assume current year)
                 isoDate = `${today.getFullYear()}-${parts[0]}-${parts[1]}`;
             } else if (parts.length === 3) {
-                 // YY.MM.DD or YYYY.MM.DD
                  let y = parts[0];
                  if (y.length === 2) y = '20' + y;
                  isoDate = `${y}-${parts[1]}-${parts[2]}`;
@@ -94,7 +84,6 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
 
   const saveEditing = (index: number) => {
     if (onEdit) {
-      // Convert YYYY-MM-DD back to MM.DD
       let formattedDate = editDate;
       if (editDate.includes('-')) {
           const [y, m, d] = editDate.split('-');
@@ -104,7 +93,7 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
       onEdit(index, {
         session: editSession,
         date: formattedDate,
-        unit: '', // Removed unit from UI
+        unit: '',
         content: editContent,
         understanding: editRating
       });
@@ -112,9 +101,14 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
     }
   };
 
-  // Logic for showing recent logs (Sort by Session Descending: Newest First)
+  // 삭제 확인 로직 추가
+  const handleDeleteConfirm = (index: number) => {
+    if (onDelete && window.confirm('이 수업 일지를 삭제하시겠습니까?')) {
+      onDelete(index);
+    }
+  };
+
   const RECENT_COUNT = 3;
-  // Sort by session descending to show latest sessions first
   const displayLogs = logs
     .map((log, i) => ({ ...log, originalIndex: i }))
     .sort((a, b) => (b.session || 0) - (a.session || 0));
@@ -136,7 +130,6 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {/* Input Row for Admin (Moved to Top) */}
             {isAdmin && onAdd && !editingIndex && (
               <tr className="bg-indigo-50/30 border-b-2 border-indigo-100">
                 <td className="px-2 py-2 align-top">
@@ -190,7 +183,6 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
             )}
 
             {displayLogs.map((item, idx) => {
-              // Hide older logs (indices >= RECENT_COUNT in reversed list) if not expanded
               if (!isExpanded && idx >= RECENT_COUNT) {
                 return null;
               }
@@ -281,7 +273,8 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
                         )}
                         {onDelete && (
                           <button 
-                            onClick={() => onDelete(originalIndex)}
+                            // 삭제 핸들러 적용
+                            onClick={() => handleDeleteConfirm(originalIndex)}
                             className="text-gray-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors"
                           >
                             <Trash2 size={14} />
@@ -294,7 +287,6 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
               );
             })}
             
-            {/* Toggle Button Row (Moved to Bottom) */}
             {hasHiddenLogs && (
               <tr>
                 <td colSpan={isAdmin ? 5 : 4} className="p-0">
