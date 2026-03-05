@@ -35,7 +35,9 @@ export const StudentManagementDashboard: React.FC<Props> = ({
     weekEnd.setDate(weekStart.getDate() + 6);
 
     const dateRangeStr = `${weekStart.getMonth() + 1}월 ${weekStart.getDate()}일 ~ ${weekEnd.getMonth() + 1}월 ${weekEnd.getDate()}일`;
-    const todayLabel = `${today.getMonth() + 1}월 ${today.getDate()-1}일`;
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1);
+    const todayLabel = `${yesterday.getMonth() + 1}월 ${yesterday.getDate()}일`;
 
     const header = `❗과제 체크 표(${dateRangeStr})\n\n[기상/30문제/해설] ${todayLabel}\n\n`;
 
@@ -44,11 +46,16 @@ export const StudentManagementDashboard: React.FC<Props> = ({
     const fetchDates = Array.from({ length: daysToFetch }).map((_, i) => {
       const d = new Date(today);
       d.setDate(today.getDate() - daysToFetch + i);
-      return d.toISOString().split('T')[0];
+
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+
+      return `${year}-${month}-${day}`; // 로컬 시간 기준 YYYY-MM-DD
     });
 
     // 학생 배열을 복사한 뒤 이름 기준 가나다순 정렬
-    const sortedStudents = [...students].sort((a, b) => 
+    const sortedStudents = [...students].sort((a, b) =>
       a.profile.name.localeCompare(b.profile.name)
     );
 
@@ -121,8 +128,8 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               <button
                 onClick={() => setViewMode('list')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <List size={14} /> 학생 관리
@@ -130,8 +137,8 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               <button
                 onClick={() => setViewMode('quick')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'quick'
-                    ? 'bg-white text-indigo-600 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
                 <Zap size={14} /> 빠른 기록
