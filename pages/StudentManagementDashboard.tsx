@@ -114,6 +114,13 @@ export const StudentManagementDashboard: React.FC<Props> = ({
     }
   };
 
+  const displayStudents = [...students].sort((a, b) => {
+    const aFav = a.profile.isFavorite ? 1 : 0;
+    const bFav = b.profile.isFavorite ? 1 : 0;
+    if (aFav !== bFav) return bFav - aFav;
+    return a.profile.name.localeCompare(b.profile.name);
+  });
+
   return (
     <div className="min-h-screen bg-gray-50 pb-10 relative">
       <header className="bg-white px-6 py-4 border-b border-gray-100 sticky top-0 z-50">
@@ -167,7 +174,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
 
       {viewMode === 'list' ? (
         <StudentList
-          students={students}
+          students={displayStudents}
           onSelectStudent={onSelectStudent}
           onAddStudent={onAddStudent}
           onUpdateStudent={onUpdateStudent}
@@ -175,7 +182,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
         />
       ) : (
         <QuickUpdateDashboard
-          students={students}
+          students={displayStudents}
           onUpdateStudent={onUpdateStudent}
         />
       )}

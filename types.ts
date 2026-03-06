@@ -68,6 +68,7 @@ export interface StudentProfile {
   lastUpdate: string;
   startDate: string; // YYYY-MM-DD format
   pinHash: string; // Hashed PIN (SHA-256) for login verification
+  isFavorite: boolean; // 즐겨찾기 여부
 }
 
 export interface AssignmentItem {
