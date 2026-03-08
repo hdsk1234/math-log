@@ -25,18 +25,18 @@ export const StudentManagementDashboard: React.FC<Props> = ({
   const [showToast, setShowToast] = useState(false);
 
   const handleCopyAssignment = async () => {
-    const today = new Date();
+    const today = new Date(); // 오늘 날짜 객체
     const currentDay = today.getDay(); // 0: 일요일 ~ 6: 토요일
+    const yesterday = new Date(today);
+    yesterday.setDate(today.getDate() - 1); // 어제 날짜 객체
 
     // 헤더용 이번 주 일요일~토요일 범위 계산
-    const weekStart = new Date(today);
-    weekStart.setDate(today.getDate() - currentDay);
+    const weekStart = new Date(yesterday);
+    weekStart.setDate(yesterday.getDate() - weekStart.getDay());
     const weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
 
     const dateRangeStr = `${weekStart.getMonth() + 1}월 ${weekStart.getDate()}일 ~ ${weekEnd.getMonth() + 1}월 ${weekEnd.getDate()}일`;
-    const yesterday = new Date(today);
-    yesterday.setDate(today.getDate() - 1);
     const todayLabel = `${yesterday.getMonth() + 1}월 ${yesterday.getDate()}일`;
 
     const header = `❗과제 체크 표(${dateRangeStr})\n\n[기상/30문제/해설] ${todayLabel}\n\n`;
