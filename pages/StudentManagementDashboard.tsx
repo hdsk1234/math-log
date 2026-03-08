@@ -24,7 +24,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
   const [viewMode, setViewMode] = useState<'list' | 'quick'>('list');
   const [showToast, setShowToast] = useState(false);
 
-  const handleCopyFormat = async () => {
+  const handleCopyAssignment = async () => {
     const today = new Date();
     const currentDay = today.getDay(); // 0: 일요일 ~ 6: 토요일
 
@@ -155,7 +155,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
 
           <div className="flex items-center gap-2">
             <button
-              onClick={handleCopyFormat}
+              onClick={handleCopyAssignment}
               className="flex items-center gap-1 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-md transition-colors"
               title="과제 체크 양식 복사"
             >
