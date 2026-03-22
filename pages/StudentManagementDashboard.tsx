@@ -29,6 +29,8 @@ export const StudentManagementDashboard: React.FC<Props> = ({
     const currentDay = today.getDay(); // 0: 일요일 ~ 6: 토요일
     const yesterday = new Date(today);
     yesterday.setDate(today.getDate() - 1); // 어제 날짜 객체
+    const todayMidnight = new Date(today);
+    todayMidnight.setHours(0, 0, 0, 0);
 
     // 헤더용 이번 주 일요일~토요일 범위 계산
     const weekStart = new Date(yesterday);
@@ -55,7 +57,14 @@ export const StudentManagementDashboard: React.FC<Props> = ({
     });
 
     // 학생 배열을 복사한 뒤 이름 기준 가나다순 정렬
-    const sortedStudents = [...students].sort((a, b) =>
+    const sortedStudents = [...students]
+      .filter(student => {
+          if (!student.profile.endDate) return true; // endDate 값이 없는 경우 예외 처리
+          const endDateObj = new Date(student.profile.endDate);
+          endDateObj.setHours(0, 0, 0, 0);
+          return endDateObj >= todayMidnight;
+        })
+      .sort((a, b) =>
       a.profile.name.localeCompare(b.profile.name)
     );
 

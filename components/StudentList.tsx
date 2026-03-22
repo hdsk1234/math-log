@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { StudentData } from '../types';
 import { Card } from './Card';
@@ -9,7 +8,7 @@ import { hashPin } from '../lib/auth';
 interface Props {
   students: StudentData[];
   onSelectStudent: (id: string) => void;
-  onAddStudent: (name: string, grade: string, school: string, pinHash: string) => void; // expects Hash
+  onAddStudent: (name: string, grade: string, school: string, pinHash: string) => void;
   onUpdateStudent: (student: StudentData) => void;
   onDeleteStudent: (id: string) => void;
 }
@@ -21,20 +20,40 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
   const [newSchool, setNewSchool] = useState('');
   const [newPin, setNewPin] = useState('');
 
-  // Editing State
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editGrade, setEditGrade] = useState('');
   const [editSchool, setEditSchool] = useState('');
   const [editStartDate, setEditStartDate] = useState('');
-  // For editing, we only take input if user wants to RESET the pin
+  const [editEndDate, setEditEndDate] = useState('');
   const [editNewPin, setEditNewPin] = useState('');
   const [isResettingPin, setIsResettingPin] = useState(false);
+
+  // 오늘 날짜 자정 기준 생성 (종료 여부 판별용)
+  const todayMidnight = new Date();
+  todayMidnight.setHours(0, 0, 0, 0);
+
+  // 종료된 학생인지 판별하는 함수
+  const isStudentEnded = (endDate?: string) => {
+    if (!endDate) return false;
+    const end = new Date(endDate);
+    end.setHours(0, 0, 0, 0);
+    return end < todayMidnight;
+  };
+
+  // 종료된 학생을 맨 밑으로 내리도록 정렬
+  const sortedStudents = [...students].sort((a, b) => {
+    const aEnded = isStudentEnded(a.profile.endDate);
+    const bEnded = isStudentEnded(b.profile.endDate);
+    
+    if (aEnded && !bEnded) return 1;
+    if (!aEnded && bEnded) return -1;
+    return 0; // 둘 다 종료 상태가 같으면 기존 순서 유지
+  });
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newName && newGrade && newSchool && newPin) {
-      // Hash the PIN before creating
       const hashed = await hashPin(newPin);
       onAddStudent(newName, newGrade, newSchool, hashed);
 
@@ -54,7 +73,7 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
     setEditGrade(student.profile.grade);
     setEditSchool(student.profile.school);
     setEditStartDate(student.profile.startDate);
-    // Do not show existing PIN
+    setEditEndDate(student.profile.endDate || '');
     setEditNewPin('');
     setIsResettingPin(false);
   };
@@ -75,11 +94,11 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
       grade: editGrade,
       school: editSchool,
       startDate: editStartDate,
+      endDate: editEndDate,
     };
 
     if (isResettingPin && editNewPin) {
       const hashed = await hashPin(editNewPin);
-      // Update Hash only
       updatedProfile = { ...updatedProfile, pinHash: hashed };
     }
 
@@ -128,6 +147,7 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
 
       {isAdding && (
         <Card className="border-2 border-indigo-100 ring-4 ring-indigo-50/50 animate-in slide-in-from-top-4 duration-200">
+          {/* ... 기존 등록 폼 유지 ... */}
           <form onSubmit={handleAddSubmit} className="space-y-4">
             <h3 className="font-bold text-gray-800 text-lg mb-4">새 학생 등록</h3>
             <div className="grid gap-3">
@@ -190,8 +210,9 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
       )}
 
       <div className="grid gap-4">
-        {students.map((student) => {
+        {sortedStudents.map((student) => {
           const isEditing = editingId === student.id;
+          const isEnded = isStudentEnded(student.profile.endDate);
 
           return (
             <div
@@ -199,6 +220,7 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
               className={`
                 group bg-white rounded-xl p-5 border shadow-sm transition-all relative overflow-hidden
                 ${isEditing ? 'border-indigo-500 ring-2 ring-indigo-100' : 'border-gray-100 hover:shadow-md hover:border-indigo-200 cursor-pointer'}
+                ${isEnded && !isEditing ? 'grayscale opacity-60 bg-gray-50' : ''} 
               `}
               onClick={!isEditing ? () => onSelectStudent(student.id) : undefined}
             >
@@ -241,6 +263,18 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                           type="date"
                           value={editStartDate}
                           onChange={e => setEditStartDate(e.target.value)}
+                          className="w-full p-1.5 text-sm focus:outline-none bg-transparent"
+                        />
+                      </div>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="text-xs text-gray-400 font-bold">종료일</label>
+                      <div className="flex items-center border border-indigo-200 rounded px-2 bg-white">
+                        <Calendar size={12} className="text-gray-400 mr-2" />
+                        <input
+                          type="date"
+                          value={editEndDate}
+                          onChange={e => setEditEndDate(e.target.value)}
                           className="w-full p-1.5 text-sm focus:outline-none bg-transparent"
                         />
                       </div>
@@ -314,8 +348,11 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                     </div>
                     <div>
                       <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-700 transition-colors">{student.profile.name}</h3>
-                        {/* 즐겨찾기 버튼 추가 */}
+                        <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-700 transition-colors">
+                          {student.profile.name}
+                          {isEnded && <span className="ml-2 text-xs text-red-500 bg-red-50 px-1.5 py-0.5 rounded border border-red-100 font-normal">종료됨</span>}
+                        </h3>
+                        {/* 즐겨찾기 버튼 */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -347,11 +384,11 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                       </div>
                       <p className="text-sm text-gray-500">{student.profile.school} • {student.profile.grade}</p>
 
-                      {/* Added Start Date Display */}
+                      {/* Start/End Date Display */}
                       <div className="flex items-center gap-3 mt-1.5">
                         <div className="flex items-center gap-1 text-xs text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100">
                           <Calendar size={10} className="text-gray-400" />
-                          <span>시작: <span className="font-bold text-gray-700">{student.profile.startDate}</span></span>
+                          <span>기간: <span className="font-bold text-gray-700">{student.profile.startDate} ~ {student.profile.endDate || '현재'}</span></span>
                         </div>
                         <p className="text-xs text-gray-300">Last: {student.profile.lastUpdate}</p>
                       </div>
