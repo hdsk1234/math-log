@@ -10,7 +10,13 @@ interface Props {
 export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStudent }) => {
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  
+  const today = new Date(); // 오늘 날짜 객체
+  const currentDay = today.getDay(); // 0: 일요일 ~ 6: 토요일
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1); // 어제 날짜 객체
+  const todayMidnight = new Date(today);
+  todayMidnight.setHours(0, 0, 0, 0);
+
   const getDailyData = (student: StudentData, date: string) => {
     return student.homework?.find(d => d.date === date);
   };
@@ -98,9 +104,16 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     return day.tasks.find(t => t.type === 'explanation')?.count || 0;
   };
 
-  const sortedStudents = [...students].sort((a, b) => 
-    a.profile.name.localeCompare(b.profile.name)
-  );
+  const sortedStudents = [...students]
+   .filter(student => {
+          if (!student.profile.endDate) return true; // endDate 값이 없는 경우 예외 처리
+          const endDateObj = new Date(student.profile.endDate);
+          endDateObj.setHours(0, 0, 0, 0);
+          return endDateObj >= todayMidnight;
+        })
+    .sort((a, b) => 
+      a.profile.name.localeCompare(b.profile.name)
+    );
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-4">
