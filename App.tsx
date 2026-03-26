@@ -189,11 +189,39 @@ function App() {
     return null;
   };
 
-  // 최종 렌더링: 라우터 적용
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<MainContent />} />
+        <Route path="/" element={
+          (isLoading && role !== 'guest') ? (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+            </div>
+          ) : role === 'guest' ? (
+            <Login onStudentLogin={handleStudentLoginAttempt} />
+          ) : (role === 'teacher' && !activeStudentId) ? (
+            <StudentManagementDashboard 
+              students={students}
+              onSelectStudent={setActiveStudentId}
+              onAddStudent={handleAddStudent}
+              onUpdateStudent={handleUpdateStudent}
+              onDeleteStudent={handleDeleteStudent}
+              onLogout={handleLogout}
+            />
+          ) : activeStudentId ? (
+            <StudentJournalDashboard
+              student={students.find(s => s.id === activeStudentId)!}
+              currentUserRole={role}
+              onUpdateStudent={handleUpdateStudent}
+              onDeleteStudent={(id) => {
+                handleDeleteStudent(id);
+                setActiveStudentId(null);
+              }}
+              onBack={role === 'teacher' ? () => setActiveStudentId(null) : undefined}
+              onLogout={handleLogout}
+            />
+          ) : null
+        } />
         <Route path="/callback" element={<Callback />} />
       </Routes>
     </BrowserRouter>
