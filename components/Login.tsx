@@ -261,73 +261,78 @@ const handleVerifyGoogleCode = async () => {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              {selectedRole === 'teacher' ? (
-                <div className="space-y-3 animate-in fade-in slide-in-from-right-4 duration-200">
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-3.5 text-gray-400" size={18} />
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="이메일 주소"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
-                      required
-                    />
-                  </div>
-                  <div className="relative">
-                    <Lock className="absolute left-3 top-3.5 text-gray-400" size={18} />
+              {/* 선생님 폼 */}
+              <div className={`space-y-3 animate-in fade-in slide-in-from-right-4 duration-200 ${selectedRole != 'teacher' ? 'hidden' : ''}`}>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                  <input
+                    id="username"
+                    name="username"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="이메일 주소"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                    required = {selectedRole == 'teacher'}
+                  />
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                  <input
+                    id="password"
+                    name="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="비밀번호 (6자 이상)"
+                    className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
+                    required = {selectedRole == 'teacher'}
+                  />
+                </div>
+                
+                {isSignUp && (
+                    <div className="relative animate-in fade-in zoom-in-95 duration-200">
+                    <ShieldCheck className="absolute left-3 top-3.5 text-indigo-500" size={18} />
                     <input
                       type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="비밀번호 (6자 이상)"
-                      className="w-full pl-10 pr-4 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all"
-                      required
+                      value={secretCode}
+                      onChange={(e) => setSecretCode(e.target.value)}
+                      placeholder="선생님 가입 인증 코드"
+                      className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-indigo-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all bg-indigo-50/30 font-bold"
+                      required = {selectedRole == 'teacher'}
                     />
                   </div>
-                  
-                  {isSignUp && (
-                     <div className="relative animate-in fade-in zoom-in-95 duration-200">
-                      <ShieldCheck className="absolute left-3 top-3.5 text-indigo-500" size={18} />
-                      <input
-                        type="password"
-                        value={secretCode}
-                        onChange={(e) => setSecretCode(e.target.value)}
-                        placeholder="선생님 가입 인증 코드"
-                        className="w-full pl-10 pr-4 py-3 rounded-xl border-2 border-indigo-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all bg-indigo-50/30 font-bold"
-                        required
-                      />
-                    </div>
-                  )}
+                )}
+              </div>
+
+              {/* 학생 폼 */}
+              <div className={`space-y-3 animate-in fade-in slide-in-from-right-4 duration-200 ${selectedRole != 'student' ? 'hidden' : ''}`}>
+                  <div className="relative">
+                  <KeyRound className="absolute left-3 top-3.5 text-gray-400" size={18} />
+                  <input
+                    type={showPin ? "text" : "password"}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={8}
+                    value={pin}
+                    onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
+                    placeholder="8자리 인증번호 (PIN)"
+                    disabled={!!lockoutUntil}
+                    autoComplete="off"
+                    className="w-full pl-10 pr-12 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all tracking-widest font-bold text-center text-lg disabled:bg-gray-100 disabled:text-gray-400"
+                    required = {selectedRole == 'student'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPin(!showPin)}
+                    className="absolute right-3 top-3 text-gray-400 hover:text-indigo-600 transition-colors p-1"
+                    tabIndex={-1}
+                  >
+                    {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
-              ) : (
-                <div className="space-y-3 animate-in fade-in slide-in-from-left-4 duration-200">
-                   <div className="relative">
-                    <KeyRound className="absolute left-3 top-3.5 text-gray-400" size={18} />
-                    <input
-                      type={showPin ? "text" : "password"}
-                      inputMode="numeric"
-                      pattern="[0-9]*"
-                      maxLength={8}
-                      value={pin}
-                      onChange={(e) => setPin(e.target.value.replace(/[^0-9]/g, ''))}
-                      placeholder="8자리 인증번호 (PIN)"
-                      disabled={!!lockoutUntil}
-                      autoComplete="off"
-                      className="w-full pl-10 pr-12 py-3 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none transition-all tracking-widest font-bold text-center text-lg disabled:bg-gray-100 disabled:text-gray-400"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPin(!showPin)}
-                      className="absolute right-3 top-3 text-gray-400 hover:text-indigo-600 transition-colors p-1"
-                      tabIndex={-1}
-                    >
-                      {showPin ? <EyeOff size={18} /> : <Eye size={18} />}
-                    </button>
-                  </div>
-                </div>
-              )}
+              </div>
+   
               
               {localError && (
                 <div className="flex items-center gap-2 text-red-500 text-sm font-medium animate-pulse bg-red-50 p-3 rounded-lg border border-red-100">
