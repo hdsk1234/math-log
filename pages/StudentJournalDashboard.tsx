@@ -38,6 +38,8 @@ export const StudentJournalDashboard: React.FC<Props> = ({
   onBack,
   onLogout
 }) => {
+  if (!student) return <div>Loading...</div>;
+  
   const isAdmin = currentUserRole === 'teacher';
 
   // toastMessage State
