@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StudentData, HomeworkType } from '../types';
-import { Calendar, CheckCircle2, Circle, AlertCircle, Play } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, AlertCircle, Play, Trash2 } from 'lucide-react';
 
 interface Props {
   students: StudentData[];
@@ -19,6 +19,24 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
 
   const getDailyData = (student: StudentData, date: string) => {
     return student.homework?.find(d => d.date === date);
+  };
+
+  const handleResetDailyData = () => {
+    if (!window.confirm(`${selectedDate}의 모든 과제 기록을 삭제하시겠습니까?`)) return;
+
+    students.forEach(student => {
+      // 해당 날짜의 데이터가 있는지 확인
+      const hasData = student.homework.some(d => d.date === selectedDate);
+      if (!hasData) return;
+
+      // 해당 날짜의 데이터만 제외하고 새로운 배열 생성
+      const newHomework = student.homework.filter(d => d.date !== selectedDate);
+
+      // DB 반영
+      onUpdateStudent({ ...student, homework: newHomework });
+    });
+
+    setManualCheckList([]); // 수동 확인 리스트 비우기
   };
 
   const handleProcessRawData = () => {
@@ -58,6 +76,11 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
         data.photoCount += 1;
       }
     } // for lines
+
+    // 알림창 확인 로직 추가
+    if (!window.confirm(`파싱된 데이터를 ${selectedDate} 날짜에 적용하시겠습니까?`)) {
+      return; // 취소 시 함수 종료
+    }
 
     const newManualList: string[] = [];
 
@@ -227,7 +250,15 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
             className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-200"
           />
         </div>
-        
+
+        <button
+          onClick={handleResetDailyData}
+          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+          title="선택된 날짜 기록 삭제"
+        >
+          <Trash2 size={18} />
+        </button>
+
         {/* 카카오톡 데이터 입력 섹션 */}
         <div className="flex flex-col gap-2 border-t pt-2 mt-1">
           <span className="text-sm font-bold text-gray-700">카카오톡 로그 파싱</span>
