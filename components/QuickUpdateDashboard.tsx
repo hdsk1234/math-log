@@ -37,6 +37,10 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     });
 
     setManualCheckList([]); // 수동 확인 리스트 비우기
+
+    setTimeout(() => {
+      window.alert("성공적으로 삭제되었습니다.")
+    }, 100)
   };
 
   const handleProcessRawData = () => {
@@ -249,15 +253,15 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
             onChange={(e) => setSelectedDate(e.target.value)}
             className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-200"
           />
+          <button
+            onClick={handleResetDailyData}
+            className="ml-auto px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-100 transition-colors"
+          >
+            기록 삭제
+          </button>
         </div>
 
-        <button
-          onClick={handleResetDailyData}
-          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
-          title="선택된 날짜 기록 삭제"
-        >
-          <Trash2 size={18} />
-        </button>
+        
 
         {/* 카카오톡 데이터 입력 섹션 */}
         <div className="flex flex-col gap-2 border-t pt-2 mt-1">
