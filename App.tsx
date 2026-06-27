@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom'; // 추가된 라우터 모듈
-import Callback from './pages/Callback'; // 새로 만든 밴드 API 콜백 컴포넌트
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
+import Callback from './pages/Callback';
 import { createNewStudent } from './constants';
 import { Login } from './components/Login';
 import { StudentManagementDashboard } from './pages/StudentManagementDashboard';
 import { StudentJournalDashboard } from './pages/StudentJournalDashboard';
+import { AdminDashboard } from './pages/AdminDashboard';
+import { RankingsPage } from './pages/RankingsPage';
 import { UserRole, StudentData } from './types';
 import { 
   subscribeToStudents, 
@@ -13,41 +15,97 @@ import {
   addStudentToDB, 
   updateStudentInDB, 
   deleteStudentFromDB, 
-  isTeacherApproved
+  isTeacherApproved,
+  checkTeacherEditPermission,
+  getTeacherData
 } from './lib/db';
 import { subscribeToAuthChanges, logOut } from './lib/auth';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from './lib/firebase';
 
-function App() {
-  const [role, setRole] = useState<UserRole>('guest');
+function AppContent() {
+  const [role, setRole] = useState<UserRole>(() => {
+    const savedRole = sessionStorage.getItem('user_role');
+    return (savedRole as UserRole) || 'guest';
+  });
   const [students, setStudents] = useState<StudentData[]>([]);
-  const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
+  const [activeStudentId, setActiveStudentId] = useState<string | null>(() => {
+    return sessionStorage.getItem('active_student_id');
+  });
+  const [canEdit, setCanEdit] = useState<boolean>(() => {
+    return sessionStorage.getItem('can_edit') === 'true';
+  });
+  const [userEmail, setUserEmail] = useState<string | null>(() => {
+    return sessionStorage.getItem('user_email');
+  });
+  const [teacherName, setTeacherName] = useState<string | null>(() => {
+    return sessionStorage.getItem('teacher_name');
+  });
+  const [googleDisplayName, setGoogleDisplayName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const navigate = useNavigate();
+  const location = useLocation();
 
-  // 1. Auth Observer
+  // 1. Auth Observer & Teacher Data Subscription
   useEffect(() => {
-    const unsubscribeAuth = subscribeToAuthChanges(async (user) => {
-      if (user) {
-        if (user.email) {
-          const approved = await isTeacherApproved(user.email);
-          if (approved) {
+    let unsubscribeTeacher: (() => void) | null = null;
+    setIsLoading(true);
+
+    const unsubscribeAuth = subscribeToAuthChanges((user) => {
+      if (unsubscribeTeacher) {
+        unsubscribeTeacher();
+        unsubscribeTeacher = null;
+      }
+
+      if (user && user.email) {
+        setGoogleDisplayName(user.displayName);
+        const docRef = doc(db, 'teachers', user.email);
+        unsubscribeTeacher = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const teacherData = docSnap.data();
             setRole('teacher');
+            sessionStorage.setItem('user_role', 'teacher');
+            setUserEmail(user.email);
+            sessionStorage.setItem('user_email', user.email!);
+            
+            const name = teacherData.name || user.email!.split('@')[0];
+            setTeacherName(name);
+            sessionStorage.setItem('teacher_name', name);
+            
+            const hasEditPermission = teacherData.canEdit === true || user.email!.toLowerCase() === 'hdsk1234@naver.com';
+            setCanEdit(hasEditPermission);
+            sessionStorage.setItem('can_edit', hasEditPermission ? 'true' : 'false');
+            setIsLoading(false);
           } else {
-            await logOut();
-            alert("승인되지 않은 선생님 계정입니다. 관리자에게 문의하거나 회원가입 시 인증 코드를 입력해주세요.");
+            // Google authenticated, but pending registration in Firestore
             setRole('guest');
+            setCanEdit(false);
+            setUserEmail(user.email);
+            setTeacherName(null);
+            setIsLoading(false);
           }
-        } else {
-           await logOut();
-           setRole('guest');
-        }
-      } else {
-        setRole((prev) => {
-          if (prev === 'teacher') return 'guest';
-          return prev;
+        }, (error) => {
+          console.error("Teacher subscription error:", error);
+          setRole('guest');
+          setCanEdit(false);
+          setUserEmail(user.email);
+          setTeacherName(null);
+          setIsLoading(false);
         });
+      } else {
+        setRole('guest');
+        setCanEdit(false);
+        setUserEmail(null);
+        setTeacherName(null);
+        setGoogleDisplayName(null);
+        setIsLoading(false);
       }
     });
-    return () => unsubscribeAuth();
+
+    return () => {
+      unsubscribeAuth();
+      if (unsubscribeTeacher) unsubscribeTeacher();
+    };
   }, []);
 
   // 2. Data Subscription
@@ -55,7 +113,7 @@ function App() {
     let unsubscribeDB: () => void;
     setIsLoading(true);
 
-    if (role === 'teacher') {
+    if (role === 'teacher' || role === 'student' || location.pathname === '/rankings') {
       try {
         unsubscribeDB = subscribeToStudents((data) => {
           setStudents(data);
@@ -66,17 +124,6 @@ function App() {
         setStudents([]); 
         setIsLoading(false);
       }
-    } else if (role === 'student' && activeStudentId) {
-      unsubscribeDB = subscribeToSingleStudent(activeStudentId, (student) => {
-        if (student) {
-          setStudents([student]); 
-        } else {
-          alert('학생 데이터를 찾을 수 없습니다.');
-          setRole('guest');
-          setActiveStudentId(null);
-        }
-        setIsLoading(false);
-      });
     } else {
       setStudents([]);
       setIsLoading(false);
@@ -85,48 +132,65 @@ function App() {
     return () => {
       if (unsubscribeDB) unsubscribeDB();
     };
-  }, [role, activeStudentId]);
+  }, [role, activeStudentId, location.pathname]);
 
-  const activeStudent = students.find(s => s.id === activeStudentId);
-
-  // --- Handlers ---
   const handleStudentLoginAttempt = async (pinHash: string): Promise<boolean> => {
     const student = await verifyStudentPin(pinHash);
     if (student) {
+      sessionStorage.setItem('user_role', 'student');
+      sessionStorage.setItem('active_student_id', student.id);
+      sessionStorage.setItem('can_edit', 'false');
       setActiveStudentId(student.id);
       setRole('student');
+      setCanEdit(false);
+      navigate(`/student/${student.id}`);
       return true;
     }
     return false;
   };
 
   const handleLogout = async () => {
+    if (!window.confirm("로그아웃 하시겠습니까?")) {
+      return;
+    }
+    sessionStorage.removeItem('user_role');
+    sessionStorage.removeItem('active_student_id');
+    sessionStorage.removeItem('can_edit');
+    sessionStorage.removeItem('user_email');
+    sessionStorage.removeItem('teacher_name');
     if (role === 'teacher') {
       try {
         await logOut();
       } catch (error) {
         console.error("Logout failed", error);
       }
-    } else {
-      setRole('guest');
-      setActiveStudentId(null);
-      setStudents([]);
     }
+    setRole('guest');
+    setCanEdit(false);
+    setUserEmail(null);
+    setTeacherName(null);
+    setActiveStudentId(null);
+    setStudents([]);
+    navigate('/login');
   };
 
   const handleAddStudent = (name: string, grade: string, school: string, pinHash: string) => {
+    if (!canEdit) return;
     const newStudent = createNewStudent(name, grade, school, pinHash);
     addStudentToDB(newStudent);
   };
 
   const handleDeleteStudent = (id: string) => {
+    if (!canEdit) return;
     deleteStudentFromDB(id);
     if (activeStudentId === id) {
       setActiveStudentId(null);
+      sessionStorage.removeItem('active_student_id');
     }
   };
 
   const handleUpdateStudent = (updatedStudent: StudentData) => {
+    if (!canEdit) return;
     const today = new Date();
     const dateString = `${today.getFullYear()}.${String(today.getMonth() + 1).padStart(2, '0')}.${String(today.getDate()).padStart(2, '0')}`;
 
@@ -141,89 +205,171 @@ function App() {
     updateStudentInDB(studentWithTimestamp);
   };
 
-  // 기존 메인 UI 렌더링 로직을 내부 컴포넌트로 분리
-  const MainContent = () => {
-    if (isLoading && role !== 'guest') {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-        </div>
-      );
-    }
-
-    if (role === 'guest') {
-      return (
-        <Login onStudentLogin={handleStudentLoginAttempt} />
-      );
-    }
-
-    if (role === 'teacher' && !activeStudent) {
-      return (
-        <StudentManagementDashboard 
-          students={students}
-          onSelectStudent={setActiveStudentId}
-          onAddStudent={handleAddStudent}
-          onUpdateStudent={handleUpdateStudent}
-          onDeleteStudent={handleDeleteStudent}
-          onLogout={handleLogout}
-        />
-      );
-    }
-
-    if (activeStudent) {
-      return (
-        <StudentJournalDashboard
-          student={activeStudent}
-          currentUserRole={role}
-          onUpdateStudent={handleUpdateStudent}
-          onDeleteStudent={(id) => {
-            handleDeleteStudent(id);
-            setActiveStudentId(null);
-          }}
-          onBack={role === 'teacher' ? () => setActiveStudentId(null) : undefined}
-          onLogout={handleLogout}
-        />
-      );
-    }
-
-    return null;
-  };
+  if (isLoading && role !== 'guest') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
 
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={
-          (isLoading && role !== 'guest') ? (
-            <div className="min-h-screen flex items-center justify-center bg-gray-50">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
-            </div>
-          ) : role === 'guest' ? (
-            <Login onStudentLogin={handleStudentLoginAttempt} />
-          ) : (role === 'teacher' && !activeStudentId) ? (
+    <Routes>
+      <Route 
+        path="/" 
+        element={
+          role === 'teacher' ? (
+            <Navigate to="/teacher" replace />
+          ) : role === 'student' && activeStudentId ? (
+            <Navigate to={`/student/${activeStudentId}`} replace />
+          ) : (
+            <Navigate to="/login" replace />
+          )
+        } 
+      />
+      <Route 
+        path="/login" 
+        element={
+          role === 'teacher' ? (
+            <Navigate to="/teacher" replace />
+          ) : role === 'student' && activeStudentId ? (
+            <Navigate to={`/student/${activeStudentId}`} replace />
+          ) : (
+            <Login 
+              onStudentLogin={handleStudentLoginAttempt} 
+              authenticatedEmail={userEmail}
+              googleDisplayName={googleDisplayName}
+            />
+          )
+        } 
+      />
+      <Route 
+        path="/teacher" 
+        element={
+          role !== 'teacher' ? (
+            <Navigate to="/login" replace />
+          ) : (
             <StudentManagementDashboard 
               students={students}
-              onSelectStudent={setActiveStudentId}
+              onSelectStudent={(id) => navigate(`/student/${id}`)}
               onAddStudent={handleAddStudent}
               onUpdateStudent={handleUpdateStudent}
               onDeleteStudent={handleDeleteStudent}
               onLogout={handleLogout}
+              canEdit={canEdit}
+              userEmail={teacherName || userEmail}
             />
-          ) : activeStudentId ? (
-            <StudentJournalDashboard
-              student={students.find(s => s.id === activeStudentId)!}
-              currentUserRole={role}
-              onUpdateStudent={handleUpdateStudent}
-              onDeleteStudent={(id) => {
-                handleDeleteStudent(id);
-                setActiveStudentId(null);
-              }}
-              onBack={role === 'teacher' ? () => setActiveStudentId(null) : undefined}
+          )
+        } 
+      />
+      <Route 
+        path="/admin" 
+        element={
+          role === 'teacher' && userEmail?.toLowerCase() === 'hdsk1234@naver.com' ? (
+            <AdminDashboard 
+              userEmail={teacherName || userEmail}
               onLogout={handleLogout}
             />
-          ) : null
-        } />
-        <Route path="/callback" element={<Callback />} />
-      </Routes>
+          ) : (
+            <Navigate to="/" replace />
+          )
+        } 
+      />
+      <Route 
+        path="/student/:studentId" 
+        element={
+          <StudentWrapper 
+            role={role}
+            activeStudentId={activeStudentId}
+            students={students}
+            onUpdateStudent={handleUpdateStudent}
+            onDeleteStudent={handleDeleteStudent}
+            onLogout={handleLogout}
+            canEdit={canEdit}
+            userEmail={teacherName || userEmail}
+          />
+        } 
+      />
+      <Route 
+        path="/rankings" 
+        element={
+          <RankingsPage 
+            role={role}
+            students={students}
+            activeStudentId={activeStudentId}
+          />
+        } 
+      />
+      <Route path="/callback" element={<Callback />} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
+interface StudentWrapperProps {
+  role: UserRole;
+  activeStudentId: string | null;
+  students: StudentData[];
+  onUpdateStudent: (student: StudentData) => void;
+  onDeleteStudent: (id: string) => void;
+  onLogout: () => void;
+  canEdit: boolean;
+  userEmail: string | null;
+}
+
+const StudentWrapper: React.FC<StudentWrapperProps> = ({
+  role,
+  activeStudentId,
+  students,
+  onUpdateStudent,
+  onDeleteStudent,
+  onLogout,
+  canEdit,
+  userEmail
+}) => {
+  const { studentId } = useParams<{ studentId: string }>();
+  const navigate = useNavigate();
+
+  if (role === 'guest') {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (role === 'student' && activeStudentId !== studentId) {
+    return <Navigate to={`/student/${activeStudentId}`} replace />;
+  }
+
+  const currentStudent = students.find(s => s.id === studentId);
+  if (!currentStudent) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <StudentJournalDashboard
+      student={currentStudent}
+      students={students}
+      currentUserRole={role}
+      onUpdateStudent={onUpdateStudent}
+      onDeleteStudent={(id) => {
+        onDeleteStudent(id);
+        navigate('/teacher');
+      }}
+      onBack={role === 'teacher' ? () => navigate(-1) : undefined}
+      onLogout={onLogout}
+      canEdit={canEdit}
+      userEmail={userEmail}
+    />
+  );
+};
+
+
+function App() {
+  return (
+    <BrowserRouter>
+      <AppContent />
     </BrowserRouter>
   );
 }

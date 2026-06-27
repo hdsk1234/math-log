@@ -17,30 +17,40 @@ import { LessonTable } from '../components/LessonTable';
 import { TextbookTracker } from '../components/TextbookTracker';
 import { UpcomingAssignments } from '../components/UpcomingAssignments';
 import { Card } from '../components/Card';
+import { useNavigate } from 'react-router-dom';
+import { StudentRankings } from '../components/StudentRankings';
 import { 
-  GraduationCap, LogOut, Settings, ArrowLeft, Pencil, X, Edit2, Copy
+  GraduationCap, LogOut, Settings, ArrowLeft, Pencil, X, Edit2, Copy, Trophy
 } from 'lucide-react';
 
 interface Props {
   student: StudentData;
+  students?: StudentData[];
   currentUserRole: UserRole;
   onUpdateStudent: (updatedStudent: StudentData) => void;
   onDeleteStudent: (id: string) => void;
   onBack?: () => void;
   onLogout: () => void;
+  canEdit?: boolean;
+  userEmail?: string | null;
 }
 
 export const StudentJournalDashboard: React.FC<Props> = ({
   student,
+  students = [],
   currentUserRole,
   onUpdateStudent,
   onDeleteStudent,
   onBack,
-  onLogout
+  onLogout,
+  canEdit = false,
+  userEmail = null
 }) => {
   if (!student) return <div>Loading...</div>;
   
-  const isAdmin = currentUserRole === 'teacher';
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'journal' | 'rankings'>('journal');
+  const isAdmin = currentUserRole === 'teacher' && !!canEdit;
 
   // toastMessage State
   const [toast, setToast] = useState<{ message: string; isVisible: boolean } | null>(null);
@@ -524,13 +534,56 @@ const handleCopyReport = async () => {
                 Math Log
               </h1>
             </div>
+
+            {/* Tab switch for Journal vs Rankings (Only visible to students) */}
+            {currentUserRole === 'student' && (
+              <div className="flex bg-gray-100 p-1 rounded-xl ml-4 shadow-sm border border-gray-200/50">
+                <button
+                  onClick={() => setActiveTab('journal')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    activeTab === 'journal'
+                      ? 'bg-white text-gray-900 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  학습 일지
+                </button>
+                <button
+                  onClick={() => setActiveTab('rankings')}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    activeTab === 'rankings'
+                      ? 'bg-white text-indigo-600 shadow-sm'
+                      : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  과제 순위
+                </button>
+              </div>
+            )}
           </div>
-          <button 
-            onClick={onLogout}
-            className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
-          >
-            <LogOut size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {currentUserRole === 'student' ? (
+              <div className="flex items-center gap-1.5 bg-emerald-50 border border-emerald-100 px-2.5 py-1.5 rounded-md text-emerald-700 font-semibold text-xs transition-all">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span>{student.profile.name} (학생)</span>
+              </div>
+            ) : (
+              userEmail && (
+                <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-md text-indigo-700 font-semibold text-xs transition-all">
+                  <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                  <span className="hidden sm:inline">{userEmail} (교사)</span>
+                  <span className="sm:hidden">{userEmail.split('@')[0]} (교사)</span>
+                </div>
+              )
+            )}
+            <button 
+              onClick={onLogout}
+              className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+              title="로그아웃"
+            >
+              <LogOut size={20} />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -545,211 +598,233 @@ const handleCopyReport = async () => {
           {toast.message}
         </div>
       )}
-        {/* Profile Card */}
-        <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
-          {/* Decorative element */}
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
-          
-          <div className="relative z-10">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <span className="text-xs font-bold text-indigo-100 uppercase tracking-widest">{student.profile.grade} • {student.profile.school}</span>
-                <h2 className="text-3xl font-black mt-1">{student.profile.name}</h2>
-              </div>
-              {isAdmin && (
-                <div className="flex gap-2">
-                  <button 
-                    onClick={handleCopyReport}
-                    className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm flex items-center gap-1"
-                    title="수업/과제 양식 복사"
-                  >
-                    <Copy size={20} />
-                  </button>
-                  <button 
-                    onClick={startEditingProfile}
-                    className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm"
-                  >
-                    <Settings size={20} />
-                  </button>
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 mt-6">
-              <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
-                <span className="text-[10px] font-bold text-indigo-100 block uppercase">마지막 업데이트</span>
-                <span className="text-sm font-bold">{student.profile.lastUpdate}</span>
-              </div>
-              <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
-                <span className="text-[10px] font-bold text-indigo-100 block uppercase">다음 수업</span>
-                <span className="text-sm font-bold">{nextLessonDate || '미정'}</span>
-              </div>
-            </div>
-            
-            {/* Teacher Note Section */}
-            {(student.teacherNote || isAdmin) && (
-              <div className="mt-6 bg-white/20 p-4 rounded-2xl border border-white/20 backdrop-blur-md transition-all hover:bg-white/25">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Pencil size={14} className="text-indigo-100" />
-                    <span className="text-xs font-bold text-indigo-100">선생님 한마디</span>
+        {activeTab === 'rankings' ? (
+          <StudentRankings
+            students={students}
+            onSelectStudent={(id) => {
+              if (currentUserRole === 'teacher') {
+                navigate(`/student/${id}`);
+                setActiveTab('journal');
+              } else {
+                if (id === student.id) {
+                  setActiveTab('journal');
+                } else {
+                  alert("다른 학생의 상세 일지 열람 권한이 없습니다.");
+                }
+              }
+            }}
+            onUpdateStudent={onUpdateStudent}
+            role={currentUserRole}
+          />
+        ) : (
+          <>
+            {/* Profile Card */}
+            <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
+              {/* Decorative element */}
+              <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 blur-2xl"></div>
+              
+              <div className="relative z-10">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <span className="text-xs font-bold text-indigo-100 uppercase tracking-widest">{student.profile.grade} • {student.profile.school}</span>
+                    <h2 className="text-3xl font-black mt-1">{student.profile.name}</h2>
                   </div>
-                  {isAdmin && !isEditingNote && (
-                    <button 
-                      onClick={() => {
-                        setNoteContent(student.teacherNote || '');
-                        setIsEditingNote(true);
-                      }}
-                      className="p-1.5 text-indigo-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-                      title="수정"
-                    >
-                      <Edit2 size={14} />
-                    </button>
-                  )}
-                </div>
-                
-                {isEditingNote ? (
-                  <div className="space-y-3 animate-in fade-in duration-200">
-                    <textarea 
-                      value={noteContent}
-                      onChange={(e) => setNoteContent(e.target.value)}
-                      className="w-full bg-black/20 text-white placeholder-white/50 text-sm p-3 rounded-xl border border-white/10 focus:outline-none focus:border-white/30 focus:bg-black/30 resize-none min-h-[80px]"
-                      placeholder="학생에게 전달할 응원의 메시지나 피드백을 적어주세요."
-                      autoFocus
-                    />
-                    <div className="flex justify-end gap-2">
+                  {isAdmin && (
+                    <div className="flex gap-2">
                       <button 
-                        onClick={() => setIsEditingNote(false)}
-                        className="px-3 py-1.5 text-xs font-bold text-indigo-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                        onClick={handleCopyReport}
+                        className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm flex items-center gap-1"
+                        title="수업/과제 양식 복사"
                       >
-                        취소
+                        <Copy size={20} />
                       </button>
                       <button 
-                        onClick={() => {
-                          onUpdateStudent({ ...student, teacherNote: noteContent });
-                          setIsEditingNote(false);
-                        }}
-                        className="px-4 py-1.5 text-xs font-bold text-indigo-600 bg-white hover:bg-indigo-50 rounded-lg shadow-sm transition-colors"
+                        onClick={startEditingProfile}
+                        className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm"
                       >
-                        저장
+                        <Settings size={20} />
                       </button>
                     </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4 mt-6">
+                  <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
+                    <span className="text-[10px] font-bold text-indigo-100 block uppercase">마지막 업데이트</span>
+                    <span className="text-sm font-bold">{student.profile.lastUpdate}</span>
                   </div>
-                ) : (
-                  <p className="text-sm leading-relaxed font-medium text-white/90 whitespace-pre-wrap">
-                    {student.teacherNote || (isAdmin ? "아직 등록된 메시지가 없습니다. 펜 아이콘을 눌러 작성해보세요!" : "")}
-                  </p>
+                  <div className="bg-white/10 rounded-2xl p-3 backdrop-blur-sm border border-white/10">
+                    <span className="text-[10px] font-bold text-indigo-100 block uppercase">다음 수업</span>
+                    <span className="text-sm font-bold">{nextLessonDate || '미정'}</span>
+                  </div>
+                </div>
+                
+                {/* Teacher Note Section */}
+                {(student.teacherNote || isAdmin) && (
+                  <div className="mt-6 bg-white/20 p-4 rounded-2xl border border-white/20 backdrop-blur-md transition-all hover:bg-white/25">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-2">
+                        <Pencil size={14} className="text-indigo-100" />
+                        <span className="text-xs font-bold text-indigo-100">선생님 한마디</span>
+                      </div>
+                      {isAdmin && !isEditingNote && (
+                        <button 
+                          onClick={() => {
+                            setNoteContent(student.teacherNote || '');
+                            setIsEditingNote(true);
+                          }}
+                          className="p-1.5 text-indigo-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                          title="수정"
+                        >
+                          <Edit2 size={14} />
+                        </button>
+                      )}
+                    </div>
+                    
+                    {isEditingNote ? (
+                      <div className="space-y-3 animate-in fade-in duration-200">
+                        <textarea 
+                          value={noteContent}
+                          onChange={(e) => setNoteContent(e.target.value)}
+                          className="w-full bg-black/20 text-white placeholder-white/50 text-sm p-3 rounded-xl border border-white/10 focus:outline-none focus:border-white/30 focus:bg-black/30 resize-none min-h-[80px]"
+                          placeholder="학생에게 전달할 응원의 메시지나 피드백을 적어주세요."
+                          autoFocus
+                        />
+                        <div className="flex justify-end gap-2">
+                          <button 
+                            onClick={() => setIsEditingNote(false)}
+                            className="px-3 py-1.5 text-xs font-bold text-indigo-100 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                          >
+                            취소
+                          </button>
+                          <button 
+                            onClick={() => {
+                              onUpdateStudent({ ...student, teacherNote: noteContent });
+                              setIsEditingNote(false);
+                            }}
+                            className="px-4 py-1.5 text-xs font-bold text-indigo-600 bg-white hover:bg-indigo-50 rounded-lg shadow-sm transition-colors"
+                          >
+                            저장
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-sm leading-relaxed font-medium text-white/90 whitespace-pre-wrap">
+                        {student.teacherNote || (isAdmin ? "아직 등록된 메시지가 없습니다. 펜 아이콘을 눌러 작성해보세요!" : "")}
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
+            </div>
+
+            {/* Profile Edit Modal */}
+            {isEditingProfile && (
+              <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+                <Card className="w-full max-w-sm">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-lg font-bold text-gray-900">학생 정보 수정</h3>
+                    <button onClick={() => setIsEditingProfile(false)}><X size={20}/></button>
+                  </div>
+                  <div className="space-y-3">
+                    <input 
+                      placeholder="이름" 
+                      value={editName} 
+                      onChange={e => setEditName(e.target.value)}
+                      className="w-full p-2 border rounded-lg"
+                    />
+                    <input 
+                      placeholder="학교" 
+                      value={editSchool} 
+                      onChange={e => setEditSchool(e.target.value)}
+                      className="w-full p-2 border rounded-lg"
+                    />
+                    <input 
+                      placeholder="학년" 
+                      value={editGrade} 
+                      onChange={e => setEditGrade(e.target.value)}
+                      className="w-full p-2 border rounded-lg"
+                    />
+                    <input 
+                      type="date"
+                      value={editStartDate} 
+                      onChange={e => setEditStartDate(e.target.value)}
+                      className="w-full p-2 border rounded-lg"
+                    />
+                    <button 
+                      onClick={handleProfileUpdate}
+                      className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors"
+                    >
+                      저장하기
+                    </button>
+                  </div>
+                </Card>
+              </div>
             )}
-          </div>
-        </div>
 
-        {/* Profile Edit Modal */}
-        {isEditingProfile && (
-          <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
-            <Card className="w-full max-w-sm">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-bold text-gray-900">학생 정보 수정</h3>
-                <button onClick={() => setIsEditingProfile(false)}><X size={20}/></button>
+            {/* Layout Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column (8/12) */}
+              <div className="lg:col-span-8 space-y-6">
+                <UpcomingAssignments 
+                  data={student.upcomingAssignments || { schedules: [], materials: [] }}
+                  isAdmin={isAdmin}
+                  onAddSchedule={addAssignmentSchedule}
+                  onDeleteSchedule={deleteAssignmentSchedule}
+                  onUpdateDate={updateAssignmentDate}
+                  onAddItem={addAssignmentItem}
+                  onUpdateItem={updateAssignmentItem}
+                  onDeleteItem={deleteAssignmentItem}
+                  onAddMaterial={addMaterial}
+                  onDeleteMaterial={deleteMaterial}
+                />
+                
+                <HomeworkCalendar 
+                  data={student.homework || []} 
+                  isAdmin={isAdmin}
+                  onToggleTask={toggleHomeworkTask}
+                  onToggleLesson={toggleLesson}
+                  onUpdateNote={updateNote}
+                  startDate={student.profile.startDate}
+                />
+                
+                <TextbookTracker 
+                  textbooks={student.textbooks || []} 
+                  isAdmin={isAdmin} 
+                  onUpdate={updateTextbooks}
+                />
+
+                <LessonTable 
+                  logs={student.lessonLogs || []} 
+                  isAdmin={isAdmin}
+                  onAdd={addLessonLog}
+                  onDelete={deleteLessonLog}
+                  onEdit={editLessonLog}
+                />
               </div>
-              <div className="space-y-3">
-                <input 
-                  placeholder="이름" 
-                  value={editName} 
-                  onChange={e => setEditName(e.target.value)}
-                  className="w-full p-2 border rounded-lg"
+
+              {/* Right Column (4/12) */}
+              <div className="lg:col-span-4 space-y-6">
+                {/* Charts show Weekly Data */}
+                <ComparisonChart data={comparisonData} />
+                
+                <MasteryChart 
+                  data={student.mastery || []} 
+                  isAdmin={isAdmin}
+                  onUpdate={updateMastery}
                 />
-                <input 
-                  placeholder="학교" 
-                  value={editSchool} 
-                  onChange={e => setEditSchool(e.target.value)}
-                  className="w-full p-2 border rounded-lg"
+
+                <WeakPointList 
+                  weakPoints={student.weakPoints || []} 
+                  isAdmin={isAdmin}
+                  onAdd={addWeakPoint}
+                  onDelete={deleteWeakPoint}
+                  onEdit={editWeakPoint}
                 />
-                <input 
-                  placeholder="학년" 
-                  value={editGrade} 
-                  onChange={e => setEditGrade(e.target.value)}
-                  className="w-full p-2 border rounded-lg"
-                />
-                <input 
-                  type="date"
-                  value={editStartDate} 
-                  onChange={e => setEditStartDate(e.target.value)}
-                  className="w-full p-2 border rounded-lg"
-                />
-                <button 
-                  onClick={handleProfileUpdate}
-                  className="w-full bg-indigo-600 text-white font-bold py-3 rounded-xl hover:bg-indigo-700 transition-colors"
-                >
-                  저장하기
-                </button>
               </div>
-            </Card>
-          </div>
+            </div>
+          </>
         )}
-
-        {/* Layout Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left Column (8/12) */}
-          <div className="lg:col-span-8 space-y-6">
-            <UpcomingAssignments 
-              data={student.upcomingAssignments || { schedules: [], materials: [] }}
-              isAdmin={isAdmin}
-              onAddSchedule={addAssignmentSchedule}
-              onDeleteSchedule={deleteAssignmentSchedule}
-              onUpdateDate={updateAssignmentDate}
-              onAddItem={addAssignmentItem}
-              onUpdateItem={updateAssignmentItem}
-              onDeleteItem={deleteAssignmentItem}
-              onAddMaterial={addMaterial}
-              onDeleteMaterial={deleteMaterial}
-            />
-            
-            <HomeworkCalendar 
-              data={student.homework || []} 
-              isAdmin={isAdmin}
-              onToggleTask={toggleHomeworkTask}
-              onToggleLesson={toggleLesson}
-              onUpdateNote={updateNote}
-              startDate={student.profile.startDate}
-            />
-            
-            <TextbookTracker 
-              textbooks={student.textbooks || []} 
-              isAdmin={isAdmin} 
-              onUpdate={updateTextbooks}
-            />
-
-            <LessonTable 
-              logs={student.lessonLogs || []} 
-              isAdmin={isAdmin}
-              onAdd={addLessonLog}
-              onDelete={deleteLessonLog}
-              onEdit={editLessonLog}
-            />
-          </div>
-
-          {/* Right Column (4/12) */}
-          <div className="lg:col-span-4 space-y-6">
-            {/* Charts show Weekly Data */}
-            <ComparisonChart data={comparisonData} />
-            
-            <MasteryChart 
-              data={student.mastery || []} 
-              isAdmin={isAdmin}
-              onUpdate={updateMastery}
-            />
-
-            <WeakPointList 
-              weakPoints={student.weakPoints || []} 
-              isAdmin={isAdmin}
-              onAdd={addWeakPoint}
-              onDelete={deleteWeakPoint}
-              onEdit={editWeakPoint}
-            />
-          </div>
-        </div>
       </main>
     </div>
   );

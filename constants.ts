@@ -76,7 +76,9 @@ export const createNewStudent = (name: string, grade: string, school: string, pi
       school,
       lastUpdate: dateString,
       startDate: startDateStr, 
+      endDate: '',
       pinHash: pinHash,
+      isFavorite: false,
     },
     homework: [],
     weakPoints: [],
@@ -206,7 +208,7 @@ export const generateDemoData = (): StudentData[] => {
       title: '쎈 수학 I', 
       subject: '수학1',
       coverImage: 'https://image.yes24.com/goods/115222047/XL',
-      currentStep: 720, 
+      completedRanges: [{ start: 1, end: 720 }], 
       totalSteps: 1200, 
       status: 'active' 
     },
@@ -215,7 +217,7 @@ export const generateDemoData = (): StudentData[] => {
       title: '블랙라벨 수학 I',
       subject: '수학1', 
       coverImage: 'https://image.yes24.com/goods/114343828/XL',
-      currentStep: 150, 
+      completedRanges: [{ start: 1, end: 150 }], 
       totalSteps: 500, 
       status: 'active' 
     },
@@ -224,7 +226,7 @@ export const generateDemoData = (): StudentData[] => {
       title: '자이스토리 수학 II',
       subject: '수학2', 
       coverImage: 'https://image.yes24.com/goods/115560667/XL',
-      currentStep: 0, 
+      completedRanges: [], 
       totalSteps: 1500, 
       status: 'paused' 
     },

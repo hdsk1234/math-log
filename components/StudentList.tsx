@@ -11,9 +11,10 @@ interface Props {
   onAddStudent: (name: string, grade: string, school: string, pinHash: string) => void;
   onUpdateStudent: (student: StudentData) => void;
   onDeleteStudent: (id: string) => void;
+  canEdit?: boolean;
 }
 
-export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddStudent, onUpdateStudent, onDeleteStudent }) => {
+export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddStudent, onUpdateStudent, onDeleteStudent, canEdit = false }) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newGrade, setNewGrade] = useState('');
@@ -136,13 +137,15 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
           </h1>
           <p className="text-gray-500 text-sm mt-1">등록된 학생들의 학습 현황을 관리합니다.</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setIsAdding(!isAdding)}
-          className={`p-2 rounded-full transition-colors shadow-sm ${isAdding ? 'bg-red-50 text-red-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-        >
-          {isAdding ? <X size={24} /> : <Plus size={24} />}
-        </button>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setIsAdding(!isAdding)}
+            className={`p-2 rounded-full transition-colors shadow-sm ${isAdding ? 'bg-red-50 text-red-500' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
+          >
+            {isAdding ? <X size={24} /> : <Plus size={24} />}
+          </button>
+        )}
       </div>
 
       {isAdding && (
@@ -396,26 +399,32 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-1 md:gap-2">
-                    <button
-                      type="button"
-                      onClick={(e) => startEditing(e, student)}
-                      className="p-2 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all relative z-20"
-                      title="정보 수정"
-                    >
-                      <Edit2 size={18} />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteInView(e, student)}
-                      className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all relative z-20"
-                      title="학생 삭제"
-                    >
-                      <Trash2 size={18} />
-                    </button>
-                    <div className="w-px h-6 bg-gray-200 mx-1"></div>
-                    <ChevronRight className="text-gray-300 group-hover:text-indigo-400" />
-                  </div>
+                  {canEdit ? (
+                    <div className="flex items-center gap-1 md:gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => startEditing(e, student)}
+                        className="p-2 text-gray-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all relative z-20"
+                        title="정보 수정"
+                      >
+                        <Edit2 size={18} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => handleDeleteInView(e, student)}
+                        className="p-2 text-gray-300 hover:text-red-500 hover:bg-red-50 rounded-full transition-all relative z-20"
+                        title="학생 삭제"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                      <div className="w-px h-6 bg-gray-200 mx-1"></div>
+                      <ChevronRight className="text-gray-300 group-hover:text-indigo-400" />
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 md:gap-2">
+                      <ChevronRight className="text-gray-300 group-hover:text-indigo-400" />
+                    </div>
+                  )}
                 </div>
               )}
             </div>

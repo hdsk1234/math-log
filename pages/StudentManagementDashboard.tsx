@@ -1,8 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { StudentData, HomeworkType } from '../types';
 import { StudentList } from '../components/StudentList';
 import { QuickUpdateDashboard } from '../components/QuickUpdateDashboard';
-import { GraduationCap, LogOut, List, Zap, Copy } from 'lucide-react';
+import { StudentRankings } from '../components/StudentRankings';
+import { GraduationCap, LogOut, List, Zap, Copy, Trophy, Shield } from 'lucide-react';
+import { DashboardExportModal } from '../components/DashboardExportModal';
 
 interface Props {
   students: StudentData[];
@@ -11,6 +14,8 @@ interface Props {
   onUpdateStudent: (student: StudentData) => void;
   onDeleteStudent: (id: string) => void;
   onLogout: () => void;
+  canEdit?: boolean;
+  userEmail?: string | null;
 }
 
 export const StudentManagementDashboard: React.FC<Props> = ({
@@ -20,9 +25,22 @@ export const StudentManagementDashboard: React.FC<Props> = ({
   onUpdateStudent,
   onDeleteStudent,
   onLogout,
+  canEdit = false,
+  userEmail = null,
 }) => {
-  const [viewMode, setViewMode] = useState<'list' | 'quick'>('list');
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewMode = (searchParams.get('tab') as 'list' | 'quick' | 'rankings') || 'list';
+  const setViewMode = (mode: 'list' | 'quick' | 'rankings') => setSearchParams({ tab: mode });
   const [showToast, setShowToast] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+
+  // Redirect if they land on quick update but don't have canEdit permissions
+  useEffect(() => {
+    if (!canEdit && viewMode === 'quick') {
+      setSearchParams({ tab: 'list' });
+    }
+  }, [canEdit, viewMode, setSearchParams]);
 
   const handleCopyAssignment = async () => {
     const today = new Date(); // 오늘 날짜 객체
@@ -137,7 +155,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <GraduationCap className="text-indigo-600" size={24} />
-              <h1 className="text-xl font-extrabold text-gray-900 tracking-tight hidden md:block">Math Tutor Admin</h1>
+              <h1 className="text-xl font-extrabold text-gray-900 tracking-tight hidden md:block">과외 일지</h1>
             </div>
 
             <div className="flex bg-gray-100 p-1 rounded-lg">
@@ -150,26 +168,53 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               >
                 <List size={14} /> 학생 관리
               </button>
+              {canEdit && (
+                <button
+                  onClick={() => setViewMode('quick')}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'quick'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                >
+                  <Zap size={14} /> 빠른 기록
+                </button>
+              )}
               <button
-                onClick={() => setViewMode('quick')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'quick'
+                onClick={() => setViewMode('rankings')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'rankings'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
-                <Zap size={14} /> 빠른 기록
+                <Trophy size={14} /> 과제 순위
               </button>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
+            {userEmail && (
+              <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-md text-indigo-700 font-semibold text-xs transition-all">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                <span className="hidden sm:inline">{userEmail} (교사)</span>
+                <span className="sm:hidden">{userEmail.split('@')[0]} (교사)</span>
+              </div>
+            )}
             <button
-              onClick={handleCopyAssignment}
-              className="flex items-center gap-1 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-md transition-colors"
-              title="과제 체크 양식 복사"
+              onClick={() => setIsExportModalOpen(true)}
+              className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 px-3.5 py-1.5 rounded-md transition-all border border-gray-200 cursor-pointer"
+              title="과제 현황 대시보드 이미지 및 텍스트 양식을 생성합니다."
             >
-              <Copy size={16} /> 과제 체크 양식 복사
+              <Copy size={16} className="text-indigo-600" /> 과제 현황 이미지 생성
             </button>
+            {userEmail?.toLowerCase() === 'hdsk1234@naver.com' && (
+              <button
+                onClick={() => navigate('/admin')}
+                className="flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-colors"
+                title="관리자 설정"
+              >
+                <Shield size={16} /> 관리자 페이지
+              </button>
+            )}
             <button
               onClick={onLogout}
               className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -181,18 +226,28 @@ export const StudentManagementDashboard: React.FC<Props> = ({
         </div>
       </header>
 
-      {viewMode === 'list' ? (
+      {viewMode === 'list' && (
         <StudentList
           students={displayStudents}
           onSelectStudent={onSelectStudent}
           onAddStudent={onAddStudent}
           onUpdateStudent={onUpdateStudent}
           onDeleteStudent={onDeleteStudent}
+          canEdit={canEdit}
         />
-      ) : (
+      )}
+      {viewMode === 'quick' && (
         <QuickUpdateDashboard
           students={displayStudents}
           onUpdateStudent={onUpdateStudent}
+        />
+      )}
+      {viewMode === 'rankings' && (
+        <StudentRankings
+          students={students}
+          onSelectStudent={onSelectStudent}
+          onUpdateStudent={onUpdateStudent}
+          role="teacher"
         />
       )}
 
@@ -202,6 +257,12 @@ export const StudentManagementDashboard: React.FC<Props> = ({
       >
         과제 체크 양식이 클립보드에 복사되었습니다
       </div>
+
+      <DashboardExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        students={students}
+      />
     </div>
   );
 };
