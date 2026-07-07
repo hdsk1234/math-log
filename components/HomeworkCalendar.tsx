@@ -1,7 +1,7 @@
 
-import React, { useState, useEffect } from 'react';
-import { DailyHomework, HomeworkType } from '../types';
-import { ChevronLeft, ChevronRight, BookOpen, Check, MessageSquare, TrendingUp } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { DailyHomework, HomeworkType, StudentProfile } from '../types';
+import { ChevronLeft, ChevronRight, BookOpen, Check, MessageSquare, TrendingUp, Coins } from 'lucide-react';
 import { Card } from './Card';
 
 interface Props {
@@ -11,6 +11,8 @@ interface Props {
   onToggleLesson?: (date: string) => void;
   onUpdateNote?: (date: string, note: string) => void;
   startDate?: string; // YYYY-MM-DD format
+  studentProfile?: StudentProfile; // 학생 수업 설정 요일 확인용
+  onTogglePaymentPaid?: (date: string) => void; // 수업료 수납 상태 토글 핸들러
 }
 
 const getTaskColor = (type: HomeworkType) => {
@@ -24,14 +26,44 @@ const getTaskColor = (type: HomeworkType) => {
 
 const getTaskLabel = (type: HomeworkType) => {
   switch (type) {
-    case 'wake_up': return '기상 미션 인증';
+    case 'wake_up': return '기상 과제 인증';
     case 'problem_30': return '매일 30문제 풀이';
     case 'explanation': return '오답 해설 작성';
     default: return '기타 과제';
   }
 };
 
-export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onToggleTask, onToggleLesson, onUpdateNote, startDate }) => {
+export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onToggleTask, onToggleLesson, onUpdateNote, startDate, studentProfile, onTogglePaymentPaid }) => {
+  // 수업일 판단 헬퍼 함수 (명시적 기록이 없으면 요일 데이터를 바탕으로 동적 계산)
+  const getHasLesson = (dateStr: string) => {
+    const dayData = data.find(d => d.date === dateStr);
+    if (dayData && dayData.hasLesson !== undefined) {
+      return dayData.hasLesson;
+    }
+    if (!studentProfile || !studentProfile.lessonDays || studentProfile.lessonDays.length === 0) {
+      return false;
+    }
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    
+    // 로컬 시간 기준으로 요일 추출 (UTC 변환 시 요일이 밀리는 이슈 방지)
+    const dateParts = dateStr.split('-').map(Number);
+    const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    const dayName = dayNames[date.getDay()];
+    
+    const startDateObj = studentProfile.startDate ? new Date(studentProfile.startDate) : null;
+    if (startDateObj) startDateObj.setHours(0,0,0,0);
+    const endDateObj = studentProfile.endDate ? new Date(studentProfile.endDate) : null;
+    if (endDateObj) endDateObj.setHours(0,0,0,0);
+    
+    const curr = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
+    curr.setHours(0,0,0,0);
+    
+    if (startDateObj && curr < startDateObj) return false;
+    if (endDateObj && curr > endDateObj) return false;
+    
+    return studentProfile.lessonDays.includes(dayName);
+  };
+
   // Start with current date
   const [currentDate, setCurrentDate] = useState(new Date());
   // Selected date for detail view (defaults to today)
@@ -40,6 +72,86 @@ export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onTog
   // Note editing state
   const [editingNote, setEditingNote] = useState('');
   const [isEditingNote, setIsEditingNote] = useState(false);
+
+  // 모든 수업일의 회차(sessionNum) 매핑
+  const lessonSessionMap = useMemo(() => {
+    const profile = studentProfile;
+    if (!profile || !profile.startDate) return {};
+
+    const allLessonDates: string[] = [];
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const startDateStr = profile.startDate;
+
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const limitDate = new Date(year, month + 2, 0); // 다음달 말일
+    const limitStr = `${limitDate.getFullYear()}-${String(limitDate.getMonth() + 1).padStart(2, '0')}-${String(limitDate.getDate()).padStart(2, '0')}`;
+
+    let tempDate = new Date(startDateStr);
+    
+    while (true) {
+      const yyyy = tempDate.getFullYear();
+      const mm = String(tempDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(tempDate.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
+      if (dateStr > limitStr) break;
+
+      const dayData = data.find(d => d.date === dateStr);
+      let isLesson = false;
+
+      if (dayData && dayData.hasLesson !== undefined) {
+        isLesson = dayData.hasLesson;
+      } else {
+        if (profile.lessonDays && profile.lessonDays.length > 0) {
+          const dayName = dayNames[tempDate.getDay()];
+          const endDateObj = profile.endDate ? new Date(profile.endDate) : null;
+          if (endDateObj) endDateObj.setHours(0,0,0,0);
+          const curr = new Date(tempDate);
+          curr.setHours(0,0,0,0);
+
+          const isWithinRange = curr <= (endDateObj || curr);
+          isLesson = isWithinRange && profile.lessonDays.includes(dayName);
+        }
+      }
+
+      if (isLesson) {
+        allLessonDates.push(dateStr);
+      }
+
+      tempDate.setDate(tempDate.getDate() + 1);
+    }
+
+    allLessonDates.sort();
+
+    const map: { [key: string]: number } = {};
+    allLessonDates.forEach((dateStr, index) => {
+      map[dateStr] = index + 1;
+    });
+
+    return map;
+  }, [data, studentProfile, currentDate]);
+
+  // 납부 대상일 계산 및 수납 완료 여부 매핑
+  const paymentDaysMap = useMemo(() => {
+    const profile = studentProfile;
+    const cycle = profile?.lessonFeeCycle;
+    if (!profile || !cycle) return {};
+
+    const map: { [key: string]: { sessionNum: number; isPaid: boolean } } = {};
+    const completedPaid = profile.completedPaymentDates || [];
+
+    Object.entries(lessonSessionMap).forEach(([dateStr, sessionNum]) => {
+      if (sessionNum % cycle === 0) {
+        map[dateStr] = {
+          sessionNum,
+          isPaid: completedPaid.includes(dateStr)
+        };
+      }
+    });
+
+    return map;
+  }, [lessonSessionMap, studentProfile]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth(); // 0-11
@@ -256,8 +368,11 @@ export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onTog
                 
                 let tasks = dayData?.tasks || [];
                 const isVirtual = tasks.length === 0;
-                const hasLesson = dayData?.hasLesson;
+                const hasLesson = getHasLesson(dateStr);
                 const hasNote = !!dayData?.note;
+                const paymentInfo = paymentDaysMap[dateStr];
+                const isPaymentDay = isAdmin && !!paymentInfo;
+                const sessionNum = lessonSessionMap[dateStr];
                 
                 if (isVirtual) {
                   tasks = [
@@ -278,25 +393,48 @@ export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onTog
                       aspect-square border rounded-lg flex flex-col items-center justify-start py-1 relative transition-all cursor-pointer
                       ${isSelected ? 'ring-2 ring-indigo-500 ring-offset-1 border-indigo-500 z-10' : ''}
                       ${hasLesson 
-                        ? 'bg-indigo-50 border-indigo-200' 
-                        : (isToday ? 'bg-blue-50 border-blue-200' : 'bg-gray-50/50 border-gray-100 hover:bg-gray-100')
+                          ? 'bg-indigo-50 border-indigo-200' 
+                          : 'bg-gray-50/50 border-gray-100 hover:bg-gray-100'
                       }
                     `}
                   >
-                    <div className="flex items-center gap-0.5 mb-1 w-full justify-center relative">
+                    <div className="flex items-center gap-0.5 mb-0.5 w-full justify-center relative">
                        <span 
                          className={`
                            text-xs font-medium 
-                           ${isToday ? 'text-blue-700 font-extrabold' : (hasLesson ? 'text-indigo-800 font-bold' : 'text-gray-500')} 
+                           ${hasLesson ? 'text-indigo-800 font-bold' : 'text-gray-500'} 
                          `}
                        >
                          {day}
                        </span>
-                       {hasLesson && <BookOpen size={8} className="text-indigo-600 absolute right-0.5 top-0.5" />}
-                       {hasNote && !hasLesson && <div className="w-1 h-1 bg-gray-400 rounded-full absolute right-1 top-1"></div>}
+                       {isPaymentDay ? (
+                         <Coins size={9} className={`${paymentInfo.isPaid ? 'text-amber-500' : 'text-rose-500'} absolute right-0.5 top-0.5`} />
+                       ) : (
+                         hasLesson && <BookOpen size={8} className="text-indigo-600 absolute right-0.5 top-0.5" />
+                       )}
+                       {hasNote && !hasLesson && !isPaymentDay && <div className="w-1 h-1 bg-gray-400 rounded-full absolute right-1 top-1"></div>}
                     </div>
+
+                    {/* Session Number Badge */}
+                    {hasLesson && sessionNum !== undefined && (
+                      isPaymentDay ? (
+                        paymentInfo.isPaid ? (
+                          <span className="text-[8px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded font-black block leading-none select-none mb-1">
+                            ₩ {sessionNum}회차
+                          </span>
+                        ) : (
+                          <span className="text-[8px] bg-rose-100 text-rose-700 px-1 py-0.5 rounded font-black block leading-none select-none mb-1 animate-pulse">
+                            ₩ {sessionNum}회차
+                          </span>
+                        )
+                      ) : (
+                        <span className="text-[8px] bg-indigo-100/60 text-indigo-700 px-1 py-0.5 rounded font-black block leading-none select-none mb-1">
+                          {sessionNum}회차
+                        </span>
+                      )
+                    )}
                     
-                    <div className="flex flex-wrap justify-center gap-0.5 px-0.5 w-full">
+                    <div className="flex flex-wrap justify-center gap-0.5 px-0.5 w-full mt-auto mb-0.5">
                        {tasks.map((task, idx) => (
                          <div 
                           key={idx} 
@@ -323,7 +461,7 @@ export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onTog
                
                <div className="grid grid-cols-3 gap-3">
                  <div className="bg-white p-3 rounded-xl border border-blue-100 shadow-sm flex flex-col items-center justify-center text-center">
-                   <div className="text-[10px] font-bold text-blue-500 mb-1 uppercase tracking-wide">기상 미션</div>
+                   <div className="text-[10px] font-bold text-blue-500 mb-1 uppercase tracking-wide">기상 과제</div>
                    <div className="text-2xl font-black text-blue-600 leading-none">
                      {weeklyStats.wake_up.count}<span className="text-sm text-gray-400 font-medium">/{weeklyStats.wake_up.total}</span>
                    </div>
@@ -400,11 +538,21 @@ export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onTog
           <Card className="border-indigo-100 ring-4 ring-indigo-50/30">
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
                <div>
-                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2 flex-wrap">
                     {parseInt(selectedDateStr.split('-')[1])}월 {parseInt(selectedDateStr.split('-')[2])}일 기록
-                    {selectedDayData.hasLesson && (
+                    {getHasLesson(selectedDateStr) && (
                       <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
                         <BookOpen size={10} /> 수업일
+                      </span>
+                    )}
+                    {isAdmin && paymentDaysMap[selectedDateStr] && (
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1 ${
+                        paymentDaysMap[selectedDateStr].isPaid
+                          ? 'bg-amber-100 text-amber-700'
+                          : 'bg-rose-100 text-rose-700'
+                      }`}>
+                        <Coins size={10} />
+                        {paymentDaysMap[selectedDateStr].isPaid ? '수업료 납부 완료' : '수업료 미납'}
                       </span>
                     )}
                   </h3>
@@ -412,14 +560,50 @@ export const HomeworkCalendar: React.FC<Props> = ({ data, isAdmin = false, onTog
                {isAdmin && onToggleLesson && (
                  <button 
                   onClick={() => onToggleLesson(selectedDateStr)}
-                  className={`text-xs px-2 py-1 rounded font-bold transition-colors ${selectedDayData.hasLesson ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                  className={`text-xs px-2 py-1 rounded font-bold transition-colors ${getHasLesson(selectedDateStr) ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
                  >
-                   {selectedDayData.hasLesson ? '수업일 취소' : '수업일로 지정'}
+                   {getHasLesson(selectedDateStr) ? '수업 취소' : '수업일로 지정'}
                  </button>
                )}
             </div>
 
             <div className="space-y-4">
+              {/* Payment Status Widget */}
+              {isAdmin && paymentDaysMap[selectedDateStr] && (
+                <div className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-100/85 flex items-center justify-between shadow-sm">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-amber-100 flex items-center justify-center text-amber-600 flex-shrink-0">
+                      <Coins size={18} />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-gray-800">
+                        수업료 납부일 ({paymentDaysMap[selectedDateStr].sessionNum}회차 수업일)
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-bold mt-0.5">
+                        {paymentDaysMap[selectedDateStr].isPaid ? '수업료가 수납 완료되었습니다.' : '수업료 미납 상태입니다.'}
+                      </div>
+                    </div>
+                  </div>
+                  {isAdmin && onTogglePaymentPaid && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-black text-amber-800 hidden sm:inline">납부 완료 처리</span>
+                      <button
+                        onClick={() => onTogglePaymentPaid(selectedDateStr)}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${
+                          paymentDaysMap[selectedDateStr].isPaid ? 'bg-amber-500' : 'bg-gray-200'
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            paymentDaysMap[selectedDateStr].isPaid ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Tasks List */}
               <div className="space-y-2">
                  {selectedDayData.tasks.map((task, idx) => (

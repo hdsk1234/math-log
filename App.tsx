@@ -7,6 +7,7 @@ import { StudentManagementDashboard } from './pages/StudentManagementDashboard';
 import { StudentJournalDashboard } from './pages/StudentJournalDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { RankingsPage } from './pages/RankingsPage';
+import { MyPage } from './pages/MyPage';
 import { UserRole, StudentData } from './types';
 import { 
   subscribeToStudents, 
@@ -174,9 +175,27 @@ function AppContent() {
     navigate('/login');
   };
 
-  const handleAddStudent = (name: string, grade: string, school: string, pinHash: string) => {
+  const handleAddStudent = (
+    name: string,
+    grade: string,
+    school: string,
+    pinHash: string,
+    lessonDays?: string[],
+    lessonFeeCycle?: number,
+    parentPhone?: string,
+    studentPhone?: string
+  ) => {
     if (!canEdit) return;
     const newStudent = createNewStudent(name, grade, school, pinHash);
+    newStudent.profile = {
+      ...newStudent.profile,
+      lessonDays,
+      lessonFeeCycle,
+      parentPhone,
+      studentPhone,
+      lastPaymentSession: 0,
+      paymentMessageTemplate: '안녕하세요, {studentName} 학생 수학 과외 교사입니다. 이번 {cycle}회차 수업이 완료되어 안내드립니다. 수업료 납부 부탁드립니다. 감사합니다.'
+    };
     addStudentToDB(newStudent);
   };
 
@@ -298,6 +317,25 @@ function AppContent() {
             students={students}
             activeStudentId={activeStudentId}
           />
+        } 
+      />
+      <Route 
+        path="/mypage" 
+        element={
+          role === 'guest' ? (
+            <Navigate to="/login" replace />
+          ) : (
+            <MyPage 
+              role={role}
+              activeStudentId={activeStudentId}
+              students={students}
+              userEmail={userEmail}
+              teacherName={teacherName}
+              onUpdateStudent={handleUpdateStudent}
+              onLogout={handleLogout}
+              canEdit={canEdit}
+            />
+          )
         } 
       />
       <Route path="/callback" element={<Callback />} />

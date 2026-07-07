@@ -232,7 +232,7 @@ export const generateDemoData = (): StudentData[] => {
     },
   ];
 
-  student.teacherNote = `주원이가 최근 기상 미션 성공률이 높아지고 있습니다. 다만, 해설 작성 과제는 조금 더 꼼꼼히 진행할 필요가 있습니다.`;
+  student.teacherNote = `주원이가 최근 기상 과제 성공률이 높아지고 있습니다. 다만, 해설 작성 과제는 조금 더 꼼꼼히 진행할 필요가 있습니다.`;
   
   student.upcomingAssignments = {
     schedules: [

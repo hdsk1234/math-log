@@ -133,12 +133,9 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
             {isAdmin && onAdd && !editingIndex && (
               <tr className="bg-indigo-50/30 border-b-2 border-indigo-100">
                 <td className="px-2 py-2 align-top">
-                   <input 
-                    type="number"
-                    value={newSession}
-                    onChange={(e) => setNewSession(parseInt(e.target.value) || 0)}
-                    className="w-full text-xs p-1.5 border border-indigo-100 rounded focus:outline-none focus:border-indigo-300 text-center font-bold text-indigo-600"
-                  />
+                  <div className="w-full text-xs py-1.5 text-center font-black text-indigo-500 bg-gray-50 border border-gray-100 rounded">
+                    #{newSession}
+                  </div>
                 </td>
                 <td className="px-2 py-2 align-top">
                   <input 
@@ -194,12 +191,9 @@ export const LessonTable: React.FC<Props> = ({ logs, isAdmin, onAdd, onDelete, o
                 return (
                   <tr key={originalIndex} className="bg-indigo-50/50">
                     <td className="px-2 py-2 align-top">
-                      <input 
-                        type="number"
-                        value={editSession}
-                        onChange={(e) => setEditSession(parseInt(e.target.value) || 0)}
-                        className="w-full text-xs p-1.5 border border-indigo-200 rounded focus:outline-none focus:border-indigo-500 text-center font-bold text-indigo-600 bg-white"
-                      />
+                      <div className="w-full text-xs py-1.5 text-center font-black text-indigo-500 bg-gray-50 border border-gray-100 rounded">
+                        #{editSession}
+                      </div>
                     </td>
                     <td className="px-2 py-2 align-top">
                        <input 

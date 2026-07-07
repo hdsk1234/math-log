@@ -24,6 +24,12 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
     return d;
   }, [today]);
 
+  const yesterdayMidnight = useMemo(() => {
+    const d = new Date(todayMidnight);
+    d.setDate(d.getDate() - 1);
+    return d;
+  }, [todayMidnight]);
+
   const currentYear = todayMidnight.getFullYear();
   const currentMonth = todayMidnight.getMonth() + 1; // 1-indexed
 
@@ -122,23 +128,23 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
     if (period === 'weekly') {
       const activeWeek = weeksForMonth.find(w => w.index === selectedWeekIndex) || weeksForMonth[0];
       if (activeWeek) {
-        // 현재 진행 중인 주차인 경우 오늘 날짜까지만 캡핑
-        const end = activeWeek.end > todayMidnight ? todayMidnight : activeWeek.end;
+        // 현재 진행 중인 주차(오늘 포함)인 경우 어제 날짜까지만 캡핑
+        const end = activeWeek.end > yesterdayMidnight ? yesterdayMidnight : activeWeek.end;
         return { start: activeWeek.start, end };
       }
       return { start: todayMidnight, end: todayMidnight };
     } else if (period === 'monthly') {
       const start = new Date(selectedYear, selectedMonth - 1, 1);
       const rawEnd = new Date(selectedYear, selectedMonth, 0);
-      const end = rawEnd > todayMidnight ? todayMidnight : rawEnd;
+      const end = rawEnd > yesterdayMidnight ? yesterdayMidnight : rawEnd;
       return { start, end };
     } else { // yearly
       const start = new Date(selectedYear, 0, 1);
       const rawEnd = new Date(selectedYear, 11, 31);
-      const end = rawEnd > todayMidnight ? todayMidnight : rawEnd;
+      const end = rawEnd > yesterdayMidnight ? yesterdayMidnight : rawEnd;
       return { start, end };
     }
-  }, [period, selectedYear, selectedMonth, selectedWeekIndex, weeksForMonth, todayMidnight]);
+  }, [period, selectedYear, selectedMonth, selectedWeekIndex, weeksForMonth, yesterdayMidnight, todayMidnight]);
 
   // 9. 해당 범위 내 일자 배열 생성 (YYYY-MM-DD 문자열 형태)
   const dateStrings = useMemo(() => {
@@ -178,12 +184,18 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
     });
 
     const statsList: StudentStats[] = targetStudents.map(student => {
-      let totalTasks = 0;
+      const totalPeriodDays = dateStrings.filter(dateStr => {
+        const currentDate = new Date(dateStr);
+        currentDate.setHours(0, 0, 0, 0);
+        return currentDate <= todayMidnight;
+      }).length;
+
+      const totalTasks = totalPeriodDays * 3;
+      const activeDays = totalPeriodDays;
       let completedTasks = 0;
       let wakeUpCompleted = 0;
       let problem30Completed = 0;
       let explanationCompleted = 0;
-      let activeDays = 0;
 
       const studentStart = student.profile.startDate ? new Date(student.profile.startDate) : null;
       if (studentStart) studentStart.setHours(0, 0, 0, 0);
@@ -200,9 +212,6 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
         const isBeforeOrEqualToday = currentDate <= todayMidnight;
 
         if (isAfterStart && isBeforeEnd && isBeforeOrEqualToday) {
-          activeDays += 1;
-          totalTasks += 3; // wake_up, problem_30, explanation
-
           const daily = student.homework?.find(h => h.date === dateStr);
           if (daily && daily.tasks) {
             const wakeUpTask = daily.tasks.find(t => t.type === 'wake_up');
@@ -394,14 +403,14 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-6">
       {/* 랭킹 조작 헤더 (이미지 캡처 대상 제외) */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+      <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
-            <Trophy className="text-indigo-600 animate-bounce" size={26} />
-            과제 제출률 순위
-          </h2>
+          <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
+            <Trophy className="text-indigo-600" />
+            과제 순위
+          </h1>
           <p className="text-gray-500 text-sm mt-1">
-            선택한 분석 기간에 과외를 진행한 학생들의 과제 달성 성과를 실시간 비교합니다.
+            학생들의 과제 제출 현황과 순위를 확인합니다.
           </p>
         </div>
 
@@ -467,19 +476,7 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
       {/* 캡처 대상 영역 시작 */}
       <div id="rankings-capture-area" className="bg-gray-50 p-6 rounded-3xl space-y-6 border border-gray-200/50">
         
-        {/* 캡처 이미지 내 상단 브랜딩 헤더 */}
-        <div className="flex justify-between items-center bg-white p-5 rounded-2xl border border-gray-100 shadow-sm">
-          <div>
-            <h2 className="text-xl font-black text-gray-900 flex items-center gap-2">
-              <Trophy className="text-indigo-600" size={24} />
-              과제 제출 현황 ({period === 'weekly' ? '주간' : period === 'monthly' ? '월간' : '연간'})
-            </h2>
-            <p className="text-gray-500 text-[11px] mt-0.5">학생들의 실시간 과제 달성 성과 대시보드입니다.</p>
-          </div>
-          <span className="text-xs bg-indigo-600 text-white px-3.5 py-1.5 rounded-xl font-extrabold shadow-sm animate-pulse">
-            과외 일지
-          </span>
-        </div>
+
 
         {/* 분석 기간 필터 컨트롤바 */}
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -572,7 +569,9 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow relative overflow-hidden">
             <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-400/10 rounded-full -mr-8 -mt-8 blur-lg"></div>
             <div className="flex items-center justify-between mb-3 relative z-10">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">명예의 전당 (1위)</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
+                {period === 'weekly' ? '이주의 학생' : period === 'monthly' ? '이달의 학생' : '올해의 학생'}
+              </span>
               <div className="w-8 h-8 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-600">
                 <Trophy size={16} />
               </div>
@@ -600,7 +599,7 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
           {/* 과제 유형별 평균 */}
           <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">미션별 평균 달성률</span>
+              <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">과제별 평균 달성률</span>
               <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center text-emerald-600">
                 <Award size={16} />
               </div>
@@ -609,7 +608,7 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
               {/* 기상 */}
               <div>
                 <div className="flex justify-between text-[10px] font-bold text-gray-600 mb-0.5">
-                  <span>기상 미션</span>
+                  <span>기상 과제</span>
                   <span>{summary.wakeUpAverage}%</span>
                 </div>
                 <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden">
@@ -664,11 +663,17 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
             {filteredRankings.map((item) => (
               <div
                 key={item.id}
-                onClick={role !== 'guest' && onSelectStudent ? () => onSelectStudent(item.id) : undefined}
-                className={`flex flex-col md:flex-row md:items-center justify-between p-4 transition-all ${
+                onClick={() => {
+                  if (role === 'guest') {
+                    alert('로그인이 필요합니다');
+                  } else if (onSelectStudent) {
+                    onSelectStudent(item.id);
+                  }
+                }}
+                className={`flex flex-col md:flex-row md:items-center justify-between p-4 transition-all cursor-pointer group ${
                   role !== 'guest' && onSelectStudent
-                    ? 'hover:bg-indigo-50/20 cursor-pointer group'
-                    : ''
+                    ? 'hover:bg-indigo-50/20'
+                    : 'hover:bg-gray-100'
                 }`}
               >
                 {/* 좌측: 순위, 이름, 학교 */}
@@ -704,11 +709,11 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
                     ></div>
                   </div>
                   <span className="text-[9px] text-gray-400 block mt-1 font-medium">
-                    수업 기간: {item.activeDays}일 (완료 {item.completedTasks}개 / 총 {item.totalTasks}개)
+                    {item.completedTasks}/{item.totalTasks}
                   </span>
                 </div>
 
-                {/* 우측: 미션별 제출 뱃지 */}
+                {/* 우측: 과제별 제출 뱃지 */}
                 <div className="flex items-center gap-2">
                   <div className="flex flex-col items-center bg-blue-50/50 border border-blue-100 rounded-xl px-2.5 py-1.5 min-w-[65px]">
                     <span className="text-[9px] text-blue-500 font-bold">기상</span>

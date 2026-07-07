@@ -70,6 +70,13 @@ export interface StudentProfile {
   endDate: string;
   pinHash: string; // Hashed PIN (SHA-256) for login verification
   isFavorite: boolean; // 즐겨찾기 여부
+  lessonDays?: string[]; // 수업 요일 예: ['화', '목']
+  lessonFeeCycle?: number; // 수납 주기 (예: 4, 8)
+  parentPhone?: string; // 학부모 번호
+  studentPhone?: string; // 학생 번호
+  paymentMessageTemplate?: string; // 납부 안내 문자 템플릿
+  lastPaymentSession?: number; // 마지막으로 수납된 세션 번호 (하위 호환성 유지)
+  completedPaymentDates?: string[]; // 수납 완료 처리된 날짜들의 배열 (YYYY-MM-DD)
 }
 
 export interface AssignmentItem {
@@ -103,3 +110,12 @@ export interface StudentData {
   teacherNote: string;
   upcomingAssignments: UpcomingAssignmentsData;
 }
+
+export interface TrendData {
+  name: string;
+  overall: number;
+  wake_up: number;
+  problem_30: number;
+  explanation: number;
+}
+

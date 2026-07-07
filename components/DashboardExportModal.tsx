@@ -21,12 +21,13 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'rate' | 'name'>('rate');
 
-  // 1. 기준 날짜 설정 (기본값: 오늘)
+  // 1. 기준 날짜 설정 (기본값: 어제)
   const [targetDateString, setTargetDateString] = useState<string>(() => {
-    const today = new Date();
-    const year = today.getFullYear();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const day = String(today.getDate()).padStart(2, '0');
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const year = yesterday.getFullYear();
+    const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+    const day = String(yesterday.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   });
 
@@ -52,10 +53,12 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
     } else if (period === 'monthly') {
       const start = new Date(date.getFullYear(), date.getMonth(), 1);
       const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
+      end.setHours(23, 59, 59, 999);
       return { start, end };
     } else {
       const start = new Date(date.getFullYear(), 0, 1);
       const end = new Date(date.getFullYear(), 11, 31);
+      end.setHours(23, 59, 59, 999);
       return { start, end };
     }
   }, [period, baseDate]);
@@ -94,12 +97,18 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
     });
 
     const statsList: StudentStats[] = targetStudents.map(student => {
-      let totalTasks = 0;
+      const totalPeriodDays = dateStrings.filter(dateStr => {
+        const currentDate = new Date(dateStr);
+        currentDate.setHours(0, 0, 0, 0);
+        return currentDate <= baseDate;
+      }).length;
+
+      const totalTasks = totalPeriodDays * 3;
+      const activeDays = totalPeriodDays;
       let completedTasks = 0;
       let wakeUpCompleted = 0;
       let problem30Completed = 0;
       let explanationCompleted = 0;
-      let activeDays = 0;
 
       const studentStart = student.profile.startDate ? new Date(student.profile.startDate) : null;
       if (studentStart) studentStart.setHours(0, 0, 0, 0);
@@ -115,9 +124,6 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
         const isBeforeOrEqualToday = currentDate <= baseDate;
 
         if (isAfterStart && isBeforeEnd && isBeforeOrEqualToday) {
-          activeDays += 1;
-          totalTasks += 3;
-
           const daily = student.homework?.find(h => h.date === dateStr);
           if (daily && daily.tasks) {
             const wakeUpTask = daily.tasks.find(t => t.type === 'wake_up');

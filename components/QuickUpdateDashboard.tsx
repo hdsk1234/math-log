@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { StudentData, HomeworkType } from '../types';
 import { Calendar, CheckCircle2, Circle, AlertCircle, Play, Trash2 } from 'lucide-react';
 
@@ -12,6 +12,12 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [rawData, setRawData] = useState('');
   const [manualCheckList, setManualCheckList] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<'name' | 'submit'>('name');
+  const [submitSequence, setSubmitSequence] = useState<{ studentId: string; name: string }[]>([]);
+
+  useEffect(() => {
+    setSubmitSequence([]);
+  }, [selectedDate]);
 
   const today = new Date();
   const todayMidnight = new Date(today);
@@ -37,6 +43,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     });
 
     setManualCheckList([]); // 수동 확인 리스트 비우기
+    setSubmitSequence([]);  // 제출 순서 리스트 비우기
 
     setTimeout(() => {
       window.alert("성공적으로 삭제되었습니다.")
@@ -48,6 +55,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
 
     const studentMap = new Map<string, { wakeUp: boolean; photoCount: number }>();
     const lines = rawData.trim().split('\n');
+    const newSubmitSequence: { studentId: string; name: string }[] = [];
 
     // 1. 텍스트 파싱
     for (const line of lines) {
@@ -78,6 +86,10 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
 
       if (content.includes('사진')) {
         data.photoCount += 1;
+        const targetStudent = students.find(s => s.profile.name === name);
+        if (targetStudent) {
+          newSubmitSequence.push({ studentId: targetStudent.id, name: targetStudent.profile.name });
+        }
       }
     } // for lines
 
@@ -134,6 +146,8 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
       onUpdateStudent({ ...student, homework: newHomework });
     }); // forEach
 
+    setSubmitSequence(newSubmitSequence);
+    setSortBy('submit'); // 파싱 완료 시 자동으로 제출순 정렬로 변경
     setManualCheckList(newManualList);
     setRawData('');
   };
@@ -230,16 +244,57 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     return day.tasks.find(t => t.type === 'explanation')?.count || 0;
   };
 
-  const sortedStudents = [...students]
-    .filter(student => {
-      if (!student.profile.endDate) return true;
-      const endDateObj = new Date(student.profile.endDate);
-      endDateObj.setHours(0, 0, 0, 0);
-      return endDateObj >= todayMidnight;
-    })
-    .sort((a, b) => 
-      a.profile.name.localeCompare(b.profile.name)
-    );
+  const activeStudents = students.filter(student => {
+    if (!student.profile.endDate) return true;
+    const endDateObj = new Date(student.profile.endDate);
+    endDateObj.setHours(0, 0, 0, 0);
+    return endDateObj >= todayMidnight;
+  });
+
+  interface SortedStudentItem {
+    student: StudentData;
+    uniqueId: string;
+    isSubmitted: boolean;
+  }
+
+  let sortedStudents: SortedStudentItem[] = [];
+
+  if (sortBy === 'submit') {
+    // 1. 제출 순서대로 중복 허용하여 구성
+    const submitted = submitSequence
+      .map((seq, idx) => {
+        const student = activeStudents.find(s => s.id === seq.studentId);
+        if (!student) return null;
+        return {
+          student,
+          uniqueId: `${student.id}-submit-${idx}`,
+          isSubmitted: true
+        };
+      })
+      .filter((item): item is SortedStudentItem => item !== null);
+
+    // 2. 제출하지 않은 학생들 가나다순으로 구성
+    const submittedIds = new Set(submitSequence.map(seq => seq.studentId));
+    const unsubmitted = activeStudents
+      .filter(s => !submittedIds.has(s.id))
+      .sort((a, b) => a.profile.name.localeCompare(b.profile.name))
+      .map(student => ({
+        student,
+        uniqueId: `${student.id}-unsubmit`,
+        isSubmitted: false
+      }));
+
+    sortedStudents = [...submitted, ...unsubmitted];
+  } else {
+    // 가나다순 정렬
+    sortedStudents = activeStudents
+      .sort((a, b) => a.profile.name.localeCompare(b.profile.name))
+      .map(student => ({
+        student,
+        uniqueId: student.id,
+        isSubmitted: false
+      }));
+  }
 
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-4">
@@ -251,8 +306,30 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
             type="date"
             value={selectedDate}
             onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+            className="bg-gray-50 border border-gray-200 rounded px-2 py-1 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-200 cursor-pointer"
           />
+          <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
+            <button
+              onClick={() => setSortBy('name')}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                sortBy === 'name'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              가나다순
+            </button>
+            <button
+              onClick={() => setSortBy('submit')}
+              className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
+                sortBy === 'submit'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              제출순
+            </button>
+          </div>
           <button
             onClick={handleResetDailyData}
             className="ml-auto px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-100 transition-colors"
@@ -293,60 +370,73 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
         </div>
 
         <div className="divide-y divide-gray-100">
-          {sortedStudents.map(student => {
+          {sortedStudents.map((item, index) => {
+            const { student, uniqueId } = item;
             const isManualCheck = manualCheckList.includes(student.id);
+            const submittedCount = submitSequence.length;
 
             return (
-              <div 
-                key={student.id} 
-                className={`grid grid-cols-[2fr_1fr_1fr_2fr] items-center p-2 transition-colors ${
-                  isManualCheck ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'
-                }`}
-              >
-                <div className="pl-2 flex items-center gap-2">
-                  <div className="flex flex-col">
-                    <span className="font-bold text-gray-800 text-sm flex items-center gap-1">
-                      {student.profile.name}
-                      {isManualCheck && <AlertCircle size={14} className="text-red-500" />}
-                    </span>
-                    <span className="text-[10px] text-gray-400">{student.profile.grade}</span>
+              <React.Fragment key={uniqueId}>
+                {sortBy === 'submit' && index === 0 && submittedCount > 0 && (
+                  <div className="bg-indigo-50/50 px-4 py-1.5 text-xs font-bold text-indigo-700 border-b border-indigo-100/50">
+                    제출 순서 (카카오톡 파싱 기준)
+                  </div>
+                )}
+                {sortBy === 'submit' && index === submittedCount && (
+                  <div className="bg-gray-50 px-4 py-1.5 text-xs font-bold text-gray-500 border-b border-t border-gray-100">
+                    미제출 학생 (가나다순)
+                  </div>
+                )}
+                <div 
+                  className={`grid grid-cols-[2fr_1fr_1fr_2fr] items-center p-2 transition-colors ${
+                    isManualCheck ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-gray-50'
+                  }`}
+                >
+                  <div className="pl-2 flex items-center gap-2">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-gray-800 text-sm flex items-center gap-1">
+                        {student.profile.name}
+                        {isManualCheck && <AlertCircle size={14} className="text-red-500" />}
+                      </span>
+                      <span className="text-[10px] text-gray-400">{student.profile.grade}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-center">
+                    <button 
+                      onClick={() => handleToggleHomework(student, 'wake_up')}
+                      className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'wake_up') ? 'text-blue-600 bg-blue-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'}`}
+                    >
+                      {getTaskStatus(student, 'wake_up') ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                    </button>
+                  </div>
+                  
+                  <div className="flex justify-center">
+                    <button 
+                      onClick={() => handleToggleHomework(student, 'problem_30')}
+                      className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'problem_30') ? 'text-emerald-600 bg-emerald-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'}`}
+                    >
+                      {getTaskStatus(student, 'problem_30') ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                    </button>
+                  </div>
+
+                  <div className="flex justify-center gap-1">
+                    {[1, 2, 3, 4, 5].map(num => (
+                      <button
+                        key={num}
+                        onClick={() => handleUpdateExplanation(student, num)}
+                        className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all ${
+                          getExplanationCount(student) === num
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                        }`}
+                      >
+                        {num}
+                      </button>
+                    ))}
                   </div>
                 </div>
-
-                <div className="flex justify-center">
-                  <button 
-                    onClick={() => handleToggleHomework(student, 'wake_up')}
-                    className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'wake_up') ? 'text-blue-600 bg-blue-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'}`}
-                  >
-                    {getTaskStatus(student, 'wake_up') ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-                  </button>
-                </div>
-                
-                <div className="flex justify-center">
-                  <button 
-                    onClick={() => handleToggleHomework(student, 'problem_30')}
-                    className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'problem_30') ? 'text-emerald-600 bg-emerald-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'}`}
-                  >
-                    {getTaskStatus(student, 'problem_30') ? <CheckCircle2 size={22} /> : <Circle size={22} />}
-                  </button>
-                </div>
-
-                <div className="flex justify-center gap-1">
-                  {[1, 2, 3, 4, 5].map(num => (
-                    <button
-                      key={num}
-                      onClick={() => handleUpdateExplanation(student, num)}
-                      className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all ${
-                        getExplanationCount(student) === num
-                          ? 'bg-purple-500 text-white'
-                          : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                      }`}
-                    >
-                      {num}
-                    </button>
-                  ))}
-                </div>
-              </div>
+              </React.Fragment>
             );
           })}
         </div>

@@ -36,7 +36,7 @@ export const DashboardImageRender: React.FC<DashboardImageRenderProps> = ({
   period,
   targetDate,
   id = 'dashboard-image-export',
-  sortBy = 'rate',
+  sortBy = 'name',
 }) => {
   const formatDateRangeString = () => {
     const days = ['일', '월', '화', '수', '목', '금', '토'];
@@ -133,20 +133,20 @@ export const DashboardImageRender: React.FC<DashboardImageRenderProps> = ({
             }
             if (status === 'none') {
               return (
-                <div key={dateStr} className="w-[18px] h-[18px] rounded bg-gray-100 text-gray-300 flex items-center justify-center text-[10px] font-bold border border-gray-200">
+                <div key={dateStr} className="w-5 h-5 rounded bg-gray-100 text-gray-300 flex items-center justify-center text-xs font-bold border border-gray-200">
                   -
                 </div>
               );
             }
             if (count > 0) {
               return (
-                <div key={dateStr} className="w-[18px] h-[18px] rounded bg-purple-50 text-purple-700 flex items-center justify-center text-[10px] font-black border border-purple-200">
+                <div key={dateStr} className="w-5 h-5 rounded bg-purple-50 text-purple-700 flex items-center justify-center text-xs font-black border border-purple-200">
                   {count}
                 </div>
               );
             } else {
               return (
-                <div key={dateStr} className="w-[18px] h-[18px] rounded bg-gray-50 text-gray-400 flex items-center justify-center text-[10px] font-bold border border-gray-200">
+                <div key={dateStr} className="w-5 h-5 rounded bg-gray-50 text-gray-400 flex items-center justify-center text-xs font-bold border border-gray-200">
                   0
                 </div>
               );
@@ -223,18 +223,22 @@ export const DashboardImageRender: React.FC<DashboardImageRenderProps> = ({
                   )}
                 </div>
               </th>
-              <th className="py-3 px-4 font-black text-gray-700 w-28">총 제출률</th>
+              <th className="py-3 px-4 font-black text-gray-700 w-28">제출률</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200">
             {calculatedRankings.map((item, index) => (
               <tr key={item.id} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
                 <td className="py-3 px-4 text-sm font-black text-gray-500">
-                  {sortBy === 'rate' ? item.rank : ''}
+                  {sortBy === 'rate' ? (
+                    item.rank === 1 ? <span className="text-xl">🥇</span> :
+                    item.rank === 2 ? <span className="text-xl">🥈</span> :
+                    item.rank === 3 ? <span className="text-xl">🥉</span> :
+                    item.rank
+                  ) : ''}
                 </td>
                 <td className="py-3 px-4 text-left">
                   <div className="font-extrabold text-gray-900 text-base">{item.name}</div>
-                  <div className="text-[11px] font-bold text-gray-400 mt-0.5">{item.school}</div>
                 </td>
                 <td className="py-3 px-2 align-middle">
                   {isWeekly ? (
@@ -288,7 +292,7 @@ export const DashboardImageRender: React.FC<DashboardImageRenderProps> = ({
             {renderStatusDot('none')} <span className="pt-0.5">대상아님(휴식/미등록)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-[18px] h-[18px] rounded bg-purple-50 text-purple-700 flex items-center justify-center text-[10px] font-black border border-purple-200">1</div>
+            <div className="w-5 h-5 rounded bg-purple-50 text-purple-700 flex items-center justify-center text-xs font-black border border-purple-200">1</div>
             <span className="pt-0.5">해설 작성 개수</span>
           </div>
         </div>

@@ -10,7 +10,16 @@ import { DashboardExportModal } from '../components/DashboardExportModal';
 interface Props {
   students: StudentData[];
   onSelectStudent: (id: string) => void;
-  onAddStudent: (name: string, grade: string, school: string, pin: string) => void;
+  onAddStudent: (
+    name: string,
+    grade: string,
+    school: string,
+    pin: string,
+    lessonDays?: string[],
+    lessonFeeCycle?: number,
+    parentPhone?: string,
+    studentPhone?: string
+  ) => void;
   onUpdateStudent: (student: StudentData) => void;
   onDeleteStudent: (id: string) => void;
   onLogout: () => void;
@@ -149,16 +158,17 @@ export const StudentManagementDashboard: React.FC<Props> = ({
   });
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-10 relative">
-      <header className="bg-white px-6 py-4 border-b border-gray-100 sticky top-0 z-50">
+    <div className="min-h-screen bg-gray-50 pb-20 sm:pb-10 relative">
+      <header className="bg-white px-4 sm:px-6 py-4 border-b border-gray-100 sticky top-0 z-50">
         <div className="flex justify-between items-center max-w-4xl mx-auto">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             <div className="flex items-center gap-2">
               <GraduationCap className="text-indigo-600" size={24} />
               <h1 className="text-xl font-extrabold text-gray-900 tracking-tight hidden md:block">과외 일지</h1>
             </div>
 
-            <div className="flex bg-gray-100 p-1 rounded-lg">
+            {/* 데스크톱 상단 탭바 (sm 이상에서만 노출) */}
+            <div className="hidden sm:flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setViewMode('list')}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'list'
@@ -191,40 +201,80 @@ export const StudentManagementDashboard: React.FC<Props> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             {userEmail && (
-              <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-md text-indigo-700 font-semibold text-xs transition-all">
+              <button
+                onClick={() => navigate('/mypage')}
+                className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 px-2.5 py-1.5 rounded-md text-indigo-700 font-semibold text-xs transition-all cursor-pointer"
+                title="마이페이지로 이동"
+              >
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
                 <span className="hidden sm:inline">{userEmail} (교사)</span>
                 <span className="sm:hidden">{userEmail.split('@')[0]} (교사)</span>
-              </div>
+              </button>
             )}
             <button
               onClick={() => setIsExportModalOpen(true)}
-              className="flex items-center gap-1.5 text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 px-3.5 py-1.5 rounded-md transition-all border border-gray-200 cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 p-2 sm:px-3 sm:py-1.5 rounded-md transition-all border border-gray-200 cursor-pointer"
               title="과제 현황 대시보드 이미지 및 텍스트 양식을 생성합니다."
             >
-              <Copy size={16} className="text-indigo-600" /> 과제 현황 이미지 생성
+              <Copy size={16} className="text-indigo-600" />
+              <span className="hidden md:inline">과제 현황 이미지 생성</span>
+              <span className="md:hidden text-[10px]">이미지 생성</span>
             </button>
             {userEmail?.toLowerCase() === 'hdsk1234@naver.com' && (
               <button
                 onClick={() => navigate('/admin')}
-                className="flex items-center gap-1.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-md transition-colors"
+                className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 p-2 sm:px-3 sm:py-1.5 rounded-md transition-colors"
                 title="관리자 설정"
               >
-                <Shield size={16} /> 관리자 페이지
+                <Shield size={16} />
+                <span className="hidden sm:inline">관리자 페이지</span>
               </button>
             )}
             <button
               onClick={onLogout}
-              className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
+              className="text-gray-400 hover:text-gray-600 p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors"
               title="로그아웃"
             >
-              <LogOut size={20} />
+              <LogOut size={18} />
             </button>
           </div>
         </div>
       </header>
+
+      {/* 모바일 전용 하단 고정 탭바 */}
+      <div className="sm:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 flex justify-around py-2 shadow-lg">
+        <button
+          onClick={() => setViewMode('list')}
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            viewMode === 'list' ? 'text-indigo-600' : 'text-gray-400'
+          }`}
+        >
+          <List size={20} />
+          <span>학생 관리</span>
+        </button>
+        {canEdit && (
+          <button
+            onClick={() => setViewMode('quick')}
+            className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+              viewMode === 'quick' ? 'text-indigo-600' : 'text-gray-400'
+            }`}
+          >
+            <Zap size={20} />
+            <span>빠른 기록</span>
+          </button>
+        )}
+        <button
+          onClick={() => setViewMode('rankings')}
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            viewMode === 'rankings' ? 'text-indigo-600' : 'text-gray-400'
+          }`}
+        >
+          <Trophy size={20} />
+          <span>과제 순위</span>
+        </button>
+      </div>
 
       {viewMode === 'list' && (
         <StudentList

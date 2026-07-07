@@ -5,10 +5,21 @@ import { Users, Plus, ChevronRight, User, Trash2, Edit2, Save, X, Calendar, Key,
 import { initializeDemoData } from '../lib/db';
 import { hashPin } from '../lib/auth';
 
+const WEEK_DAYS = ['월', '화', '수', '목', '금', '토', '일'];
+
 interface Props {
   students: StudentData[];
   onSelectStudent: (id: string) => void;
-  onAddStudent: (name: string, grade: string, school: string, pinHash: string) => void;
+  onAddStudent: (
+    name: string,
+    grade: string,
+    school: string,
+    pinHash: string,
+    lessonDays?: string[],
+    lessonFeeCycle?: number,
+    parentPhone?: string,
+    studentPhone?: string
+  ) => void;
   onUpdateStudent: (student: StudentData) => void;
   onDeleteStudent: (id: string) => void;
   canEdit?: boolean;
@@ -20,6 +31,12 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
   const [newGrade, setNewGrade] = useState('');
   const [newSchool, setNewSchool] = useState('');
   const [newPin, setNewPin] = useState('');
+  
+  // 신규 등록용 수업 및 연락처 상태
+  const [newLessonDays, setNewLessonDays] = useState<string[]>([]);
+  const [newLessonFeeCycle, setNewLessonFeeCycle] = useState<number | ''>('');
+  const [newParentPhone, setNewParentPhone] = useState('');
+  const [newStudentPhone, setNewStudentPhone] = useState('');
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
@@ -29,6 +46,12 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
   const [editEndDate, setEditEndDate] = useState('');
   const [editNewPin, setEditNewPin] = useState('');
   const [isResettingPin, setIsResettingPin] = useState(false);
+
+  // 수정용 수업 및 연락처 상태
+  const [editLessonDays, setEditLessonDays] = useState<string[]>([]);
+  const [editLessonFeeCycle, setEditLessonFeeCycle] = useState<number | ''>('');
+  const [editParentPhone, setEditParentPhone] = useState('');
+  const [editStudentPhone, setEditStudentPhone] = useState('');
 
   // 오늘 날짜 자정 기준 생성 (종료 여부 판별용)
   const todayMidnight = new Date();
@@ -56,12 +79,25 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
     e.preventDefault();
     if (newName && newGrade && newSchool && newPin) {
       const hashed = await hashPin(newPin);
-      onAddStudent(newName, newGrade, newSchool, hashed);
+      onAddStudent(
+        newName,
+        newGrade,
+        newSchool,
+        hashed,
+        newLessonDays.length > 0 ? newLessonDays : undefined,
+        newLessonFeeCycle !== '' ? Number(newLessonFeeCycle) : undefined,
+        newParentPhone || undefined,
+        newStudentPhone || undefined
+      );
 
       setNewName('');
       setNewGrade('');
       setNewSchool('');
       setNewPin('');
+      setNewLessonDays([]);
+      setNewLessonFeeCycle('');
+      setNewParentPhone('');
+      setNewStudentPhone('');
       setIsAdding(false);
     }
   };
@@ -77,6 +113,12 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
     setEditEndDate(student.profile.endDate || '');
     setEditNewPin('');
     setIsResettingPin(false);
+    
+    // 추가 필드 바인딩
+    setEditLessonDays(student.profile.lessonDays || []);
+    setEditLessonFeeCycle(student.profile.lessonFeeCycle !== undefined ? student.profile.lessonFeeCycle : '');
+    setEditParentPhone(student.profile.parentPhone || '');
+    setEditStudentPhone(student.profile.studentPhone || '');
   };
 
   const cancelEditing = (e: React.MouseEvent) => {
@@ -96,6 +138,10 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
       school: editSchool,
       startDate: editStartDate,
       endDate: editEndDate,
+      lessonDays: editLessonDays.length > 0 ? editLessonDays : undefined,
+      lessonFeeCycle: editLessonFeeCycle !== '' ? Number(editLessonFeeCycle) : undefined,
+      parentPhone: editParentPhone || undefined,
+      studentPhone: editStudentPhone || undefined,
     };
 
     if (isResettingPin && editNewPin) {
@@ -202,6 +248,74 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                 />
                 <p className="text-[10px] text-gray-400 mt-1">* PIN 번호는 안전하게 암호화되어 저장됩니다.</p>
               </div>
+
+              {/* 추가 입력 필드 (수업 정보 및 연락처) */}
+              <div className="border-t border-gray-100 pt-3 mt-1 space-y-3">
+                <span className="text-xs font-extrabold text-indigo-600 block uppercase tracking-wider">수업 일정 & 연락처 (선택 사항)</span>
+                <div>
+                  <label className="block text-xs font-bold text-gray-500 mb-1.5">수업 요일 선택</label>
+                  <div className="flex flex-wrap gap-2">
+                    {WEEK_DAYS.map(day => {
+                      const isChecked = newLessonDays.includes(day);
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => {
+                            if (isChecked) {
+                              setNewLessonDays(newLessonDays.filter(d => d !== day));
+                            } else {
+                              setNewLessonDays([...newLessonDays, day]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                            isChecked
+                              ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-extrabold'
+                              : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                          }`}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">수납 주기 (회차)</label>
+                    <input
+                      type="number"
+                      value={newLessonFeeCycle}
+                      onChange={e => setNewLessonFeeCycle(e.target.value !== '' ? Number(e.target.value) : '')}
+                      placeholder="예: 8 (8회마다)"
+                      className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 text-sm font-bold"
+                      min={1}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">학생 번호</label>
+                    <input
+                      type="text"
+                      value={newStudentPhone}
+                      onChange={e => setNewStudentPhone(e.target.value)}
+                      placeholder="010-0000-0000"
+                      className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 text-sm font-semibold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-500 mb-1">학부모 번호</label>
+                    <input
+                      type="text"
+                      value={newParentPhone}
+                      onChange={e => setNewParentPhone(e.target.value)}
+                      placeholder="010-0000-0000"
+                      className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
             <div className="flex justify-end pt-2">
               <button type="submit" className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold text-sm hover:bg-indigo-700 transition-colors">
@@ -283,6 +397,75 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                       </div>
                     </div>
                   </div>
+
+                  {/* 수정용 추가 입력 필드 (수업 정보 및 연락처) */}
+                  <div className="border-t border-gray-100 pt-3 mt-1 space-y-3">
+                    <span className="text-xs font-extrabold text-indigo-600 block uppercase tracking-wider">수업 일정 & 연락처 (선택 사항)</span>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 mb-1">수업 요일 선택</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {WEEK_DAYS.map(day => {
+                          const isChecked = editLessonDays.includes(day);
+                          return (
+                            <button
+                              key={day}
+                              type="button"
+                              onClick={() => {
+                                if (isChecked) {
+                                  setEditLessonDays(editLessonDays.filter(d => d !== day));
+                                } else {
+                                  setEditLessonDays([...editLessonDays, day]);
+                                }
+                              }}
+                              className={`px-2.5 py-1 rounded text-xs font-bold transition-all border ${
+                                isChecked
+                                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-extrabold'
+                                  : 'bg-white border-gray-200 text-gray-400 hover:bg-gray-50'
+                              }`}
+                            >
+                              {day}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-400 font-bold block mb-1">수납 주기 (회차)</label>
+                        <input
+                          type="number"
+                          value={editLessonFeeCycle}
+                          onChange={e => setEditLessonFeeCycle(e.target.value !== '' ? Number(e.target.value) : '')}
+                          placeholder="예: 8 (8회마다)"
+                          className="w-full p-1.5 border border-indigo-200 rounded text-sm font-bold focus:outline-none focus:border-indigo-500"
+                          min={1}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs text-gray-400 font-bold block mb-1">학생 번호</label>
+                        <input
+                          type="text"
+                          value={editStudentPhone}
+                          onChange={e => setEditStudentPhone(e.target.value)}
+                          placeholder="010-0000-0000"
+                          className="w-full p-1.5 border border-indigo-200 rounded text-sm font-semibold focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-gray-400 font-bold block mb-1">학부모 번호</label>
+                        <input
+                          type="text"
+                          value={editParentPhone}
+                          onChange={e => setEditParentPhone(e.target.value)}
+                          placeholder="010-0000-0000"
+                          className="w-full p-1.5 border border-indigo-200 rounded text-sm font-semibold focus:outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
                   {/* PIN Reset */}
                   <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 mt-2">
                     <div className="flex justify-between items-center mb-1">
