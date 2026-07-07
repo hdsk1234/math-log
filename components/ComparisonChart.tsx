@@ -64,7 +64,7 @@ export const ComparisonChart: React.FC<Props> = ({ data, selectedMonth, onMonthC
             <ChevronLeft size={16} />
           </button>
           <span className="select-none px-0.5">
-            {monthLabel} 숙제 완성도
+            {monthLabel} 과제 제출률
           </span>
           <button
             onClick={handleNextMonth}
@@ -82,7 +82,7 @@ export const ComparisonChart: React.FC<Props> = ({ data, selectedMonth, onMonthC
       <div className="flex justify-end gap-3 text-[11px] font-bold text-gray-500 mb-3 px-1">
         <div className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-[#4f46e5]" />
-          <span>나의 완성도</span>
+          <span>나의 제출률</span>
         </div>
         <div className="flex items-center gap-1">
           <span className="w-2 h-2 rounded-full bg-[#cbd5e1]" />
