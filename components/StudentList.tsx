@@ -77,7 +77,11 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (newName && newGrade && newSchool && newPin) {
+    if (newPin.length !== 8) {
+      alert('PIN 번호는 반드시 8자리 숫자여야 합니다.');
+      return;
+    }
+    if (newName && newPin) {
       const hashed = await hashPin(newPin);
       onAddStudent(
         newName,
@@ -145,6 +149,10 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
     };
 
     if (isResettingPin && editNewPin) {
+      if (editNewPin.length !== 8) {
+        alert('PIN 번호는 반드시 8자리 숫자여야 합니다.');
+        return;
+      }
       const hashed = await hashPin(editNewPin);
       updatedProfile = { ...updatedProfile, pinHash: hashed };
     }
@@ -201,7 +209,7 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
             <h3 className="font-bold text-gray-800 text-lg mb-4">새 학생 등록</h3>
             <div className="grid gap-3">
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">이름</label>
+                <label className="block text-xs font-bold text-gray-500 mb-1">이름 (필수)</label>
                 <input
                   type="text"
                   value={newName}
@@ -213,30 +221,28 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">학년</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">학년 (선택)</label>
                   <input
                     type="text"
                     value={newGrade}
                     onChange={e => setNewGrade(e.target.value)}
                     className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500"
                     placeholder="고등학교 1학년"
-                    required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">학교</label>
+                  <label className="block text-xs font-bold text-gray-500 mb-1">학교 (선택)</label>
                   <input
                     type="text"
                     value={newSchool}
                     onChange={e => setNewSchool(e.target.value)}
                     className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500"
                     placeholder="서울고등학교"
-                    required
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">접속용 PIN 설정 (8자리 숫자 권장)</label>
+                <label className="block text-xs font-bold text-gray-500 mb-1">접속용 PIN 설정 (필수, 8자리 숫자)</label>
                 <input
                   type="text"
                   value={newPin}
@@ -244,14 +250,18 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                   className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:border-indigo-500 font-mono tracking-widest text-indigo-600 font-bold"
                   placeholder="12345678"
                   inputMode="numeric"
+                  minLength={8}
+                  maxLength={8}
+                  pattern="\d{8}"
                   required
+                  onInvalid={e => (e.target as HTMLInputElement).setCustomValidity('PIN은 8자리여야 합니다.')}
+                  onInput={e => (e.target as HTMLInputElement).setCustomValidity('')}
                 />
                 <p className="text-[10px] text-gray-400 mt-1">* PIN 번호는 안전하게 암호화되어 저장됩니다.</p>
               </div>
 
               {/* 추가 입력 필드 (수업 정보 및 연락처) */}
               <div className="border-t border-gray-100 pt-3 mt-1 space-y-3">
-                <span className="text-xs font-extrabold text-indigo-600 block uppercase tracking-wider">수업 일정 & 연락처 (선택 사항)</span>
                 <div>
                   <label className="block text-xs font-bold text-gray-500 mb-1.5">수업 요일 선택</label>
                   <div className="flex flex-wrap gap-2">
@@ -348,8 +358,8 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                     <h3 className="font-bold text-indigo-700">정보 수정</h3>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-gray-400 font-bold">이름</label>
+                    <div className="col-span-2">
+                      <label className="text-xs text-gray-400 font-bold">이름 (필수)</label>
                       <input
                         value={editName}
                         onChange={e => setEditName(e.target.value)}
@@ -357,7 +367,7 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 font-bold">학년</label>
+                      <label className="text-xs text-gray-400 font-bold">학년 (선택)</label>
                       <input
                         value={editGrade}
                         onChange={e => setEditGrade(e.target.value)}
@@ -365,7 +375,7 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                       />
                     </div>
                     <div>
-                      <label className="text-xs text-gray-400 font-bold">학교</label>
+                      <label className="text-xs text-gray-400 font-bold">학교 (선택)</label>
                       <input
                         value={editSchool}
                         onChange={e => setEditSchool(e.target.value)}
@@ -384,8 +394,8 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                         />
                       </div>
                     </div>
-                    <div className="col-span-2">
-                      <label className="text-xs text-gray-400 font-bold">종료일</label>
+                    <div>
+                      <label className="text-xs text-gray-400 font-bold">종료일 (선택)</label>
                       <div className="flex items-center border border-indigo-200 rounded px-2 bg-white">
                         <Calendar size={12} className="text-gray-400 mr-2" />
                         <input
@@ -400,7 +410,6 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
 
                   {/* 수정용 추가 입력 필드 (수업 정보 및 연락처) */}
                   <div className="border-t border-gray-100 pt-3 mt-1 space-y-3">
-                    <span className="text-xs font-extrabold text-indigo-600 block uppercase tracking-wider">수업 일정 & 연락처 (선택 사항)</span>
                     <div>
                       <label className="block text-xs font-bold text-gray-400 mb-1">수업 요일 선택</label>
                       <div className="flex flex-wrap gap-1.5">
@@ -469,7 +478,7 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                   {/* PIN Reset */}
                   <div className="bg-gray-50 p-2 rounded-lg border border-gray-100 mt-2">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-xs font-bold text-gray-500">학생 접속용 PIN</span>
+                      <span className="text-xs font-bold text-gray-500">학생 접속용 PIN (필수)</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -489,7 +498,13 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                         onChange={e => setEditNewPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 8))}
                         className="w-full p-1 border border-indigo-300 rounded text-indigo-600 font-mono font-bold tracking-widest text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                         inputMode="numeric"
-                        placeholder="새 PIN 입력"
+                        placeholder="새 PIN 8자리 입력"
+                        minLength={8}
+                        maxLength={8}
+                        pattern="\d{8}"
+                        required
+                        onInvalid={e => (e.target as HTMLInputElement).setCustomValidity('PIN은 8자리여야 합니다.')}
+                        onInput={e => (e.target as HTMLInputElement).setCustomValidity('')}
                         autoFocus
                       />
                     ) : (

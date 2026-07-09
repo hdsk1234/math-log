@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { StudentData, HomeworkType } from '../types';
-import { Calendar, CheckCircle2, Circle, AlertCircle, Play, Trash2 } from 'lucide-react';
+import { Calendar, CheckCircle2, Circle, AlertCircle, Play, Trash2, X } from 'lucide-react';
 
 interface Props {
   students: StudentData[];
@@ -14,6 +14,13 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
   const [manualCheckList, setManualCheckList] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'name' | 'submit'>('name');
   const [submitSequence, setSubmitSequence] = useState<{ studentId: string; name: string }[]>([]);
+
+  // --- Undo (실행 취소) 관련 백업 State ---
+  const [undoBackup, setUndoBackup] = useState<{ studentId: string; homework: any[] }[] | null>(null);
+  const [undoManualCheckList, setUndoManualCheckList] = useState<string[]>([]);
+  const [undoSubmitSequence, setUndoSubmitSequence] = useState<{ studentId: string; name: string }[]>([]);
+  const [showUndoToast, setShowUndoToast] = useState(false);
+  const [undoTargetDate, setUndoTargetDate] = useState('');
 
   useEffect(() => {
     setSubmitSequence([]);
@@ -30,15 +37,23 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
   const handleResetDailyData = () => {
     if (!window.confirm(`${selectedDate}의 모든 과제 기록을 삭제하시겠습니까?`)) return;
 
+    // 1. 삭제 전 상태 백업
+    const backup = students.map(student => ({
+      studentId: student.id,
+      homework: [...student.homework]
+    }));
+    setUndoBackup(backup);
+    setUndoManualCheckList([...manualCheckList]);
+    setUndoSubmitSequence([...submitSequence]);
+    setUndoTargetDate(selectedDate);
+    setShowUndoToast(true);
+
+    // 2. 해당 날짜 데이터 삭제 수행
     students.forEach(student => {
-      // 해당 날짜의 데이터가 있는지 확인
       const hasData = student.homework.some(d => d.date === selectedDate);
       if (!hasData) return;
 
-      // 해당 날짜의 데이터만 제외하고 새로운 배열 생성
       const newHomework = student.homework.filter(d => d.date !== selectedDate);
-
-      // DB 반영
       onUpdateStudent({ ...student, homework: newHomework });
     });
 
@@ -46,8 +61,28 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     setSubmitSequence([]);  // 제출 순서 리스트 비우기
 
     setTimeout(() => {
-      window.alert("성공적으로 삭제되었습니다.")
-    }, 100)
+      window.alert("성공적으로 삭제되었습니다.");
+    }, 100);
+  };
+
+  // 삭제 되돌리기(Undo) 액션 실행 함수
+  const triggerUndo = () => {
+    if (!undoBackup || !undoTargetDate) return;
+
+    students.forEach(student => {
+      const studentBackup = undoBackup.find(b => b.studentId === student.id);
+      if (studentBackup) {
+        onUpdateStudent({ ...student, homework: studentBackup.homework });
+      }
+    });
+
+    setManualCheckList(undoManualCheckList);
+    setSubmitSequence(undoSubmitSequence);
+
+    setUndoBackup(null);
+    setUndoManualCheckList([]);
+    setUndoSubmitSequence([]);
+    setShowUndoToast(false);
   };
 
   const handleProcessRawData = () => {
@@ -441,6 +476,43 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
           })}
         </div>
       </div>
+
+      {/* Undo Toast Notification UI */}
+      {showUndoToast && (
+        <div 
+          style={{
+            position: 'fixed',
+            bottom: '40px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 99999,
+            backgroundColor: '#111827',
+            color: '#ffffff',
+            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+          }}
+          className="px-5 py-3 rounded-full flex items-center gap-3 text-xs font-bold transition-all duration-300 shadow-xl border border-gray-800"
+        >
+          <span>{undoTargetDate}의 삭제된 기록을 되돌리시겠습니까?</span>
+          <button 
+            onClick={triggerUndo}
+            className="text-indigo-400 hover:text-indigo-300 bg-indigo-500/10 hover:bg-indigo-500/20 px-2.5 py-1 rounded-md transition-colors font-black"
+          >
+            되돌리기
+          </button>
+          <span className="text-gray-600">|</span>
+          <button 
+            onClick={() => {
+              setShowUndoToast(false);
+              setUndoBackup(null);
+              setUndoTargetDate('');
+            }}
+            className="text-gray-400 hover:text-white p-0.5 rounded-full transition-colors flex items-center justify-center"
+            title="닫기"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
     </div>
   );
 };

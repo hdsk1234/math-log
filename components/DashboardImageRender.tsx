@@ -14,6 +14,7 @@ export interface StudentStats {
   completedTasks: number;
   totalTasks: number;
   activeDays: number;
+  totalExplanationCount?: number;
   rank?: number;
 }
 
@@ -258,7 +259,9 @@ export const DashboardImageRender: React.FC<DashboardImageRenderProps> = ({
                   {isWeekly ? (
                     renderDailyTaskGrid(item.id, 'explanation')
                   ) : (
-                    <div className="font-black text-purple-600">{item.explanationRate}%</div>
+                    <div className="font-black text-purple-600">
+                      {item.explanationRate}% ({item.totalExplanationCount || 0}개)
+                    </div>
                   )}
                 </td>
                 <td className="py-3 px-4">

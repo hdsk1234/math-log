@@ -109,6 +109,7 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
       let wakeUpCompleted = 0;
       let problem30Completed = 0;
       let explanationCompleted = 0;
+      let totalExplanationCount = 0;
 
       const studentStart = student.profile.startDate ? new Date(student.profile.startDate) : null;
       if (studentStart) studentStart.setHours(0, 0, 0, 0);
@@ -142,6 +143,9 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
               completedTasks += 1;
               explanationCompleted += 1;
             }
+            if (explanationTask) {
+              totalExplanationCount += explanationTask.count || (explanationTask.completed ? 1 : 0);
+            }
           }
         }
       });
@@ -163,7 +167,8 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
         explanationRate,
         completedTasks,
         totalTasks,
-        activeDays
+        activeDays,
+        totalExplanationCount
       };
     });
 
@@ -171,15 +176,23 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
       if (b.overallRate !== a.overallRate) {
         return b.overallRate - a.overallRate;
       }
+      const aExp = a.totalExplanationCount || 0;
+      const bExp = b.totalExplanationCount || 0;
+      if (bExp !== aExp) {
+        return bExp - aExp;
+      }
       return a.name.localeCompare(b.name);
     });
 
     let currentRank = 1;
     let prevRate = -1;
+    let prevExp = -1;
     const ranked = sorted.map((item, index) => {
-      if (item.overallRate !== prevRate) {
+      const expCount = item.totalExplanationCount || 0;
+      if (item.overallRate !== prevRate || expCount !== prevExp) {
         currentRank = index + 1;
         prevRate = item.overallRate;
+        prevExp = expCount;
       }
       return {
         ...item,

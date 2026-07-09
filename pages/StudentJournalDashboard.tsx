@@ -19,6 +19,7 @@ import { UpcomingAssignments } from '../components/UpcomingAssignments';
 import { Card } from '../components/Card';
 import { useNavigate } from 'react-router-dom';
 import { StudentRankings } from '../components/StudentRankings';
+import { ParentReportModal } from '../components/ParentReportModal';
 import { 
   GraduationCap, LogOut, Settings, ArrowLeft, Pencil, X, Edit2, Copy, Trophy, BookOpen, Send
 } from 'lucide-react';
@@ -51,6 +52,7 @@ export const StudentJournalDashboard: React.FC<Props> = ({
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'journal' | 'rankings'>('journal');
   const isAdmin = currentUserRole === 'teacher' && !!canEdit;
+  const [isParentReportModalOpen, setIsParentReportModalOpen] = useState(false);
 
   // toastMessage State
   const [toast, setToast] = useState<{ message: string; isVisible: boolean } | null>(null);
@@ -61,6 +63,9 @@ export const StudentJournalDashboard: React.FC<Props> = ({
   const [editSchool, setEditSchool] = useState('');
   const [editGrade, setEditGrade] = useState('');
   const [editStartDate, setEditStartDate] = useState('');
+  const [editEndDate, setEditEndDate] = useState('');
+  const [editNewPin, setEditNewPin] = useState('');
+  const [isResettingPin, setIsResettingPin] = useState(false);
   const [editLessonDays, setEditLessonDays] = useState<string[]>([]);
   const [editLessonFeeCycle, setEditLessonFeeCycle] = useState<number | ''>('');
   const [editParentPhone, setEditParentPhone] = useState('');
@@ -72,43 +77,72 @@ export const StudentJournalDashboard: React.FC<Props> = ({
     const profile = updatedStudent.profile;
     const currentLogs = updatedStudent.lessonLogs || [];
     
-    const lessonDates: string[] = [];
-    
-    // 1. 달력 데이터 중 수업일로 지정된 날짜들을 수집
+    if (!profile.startDate || !profile.lessonDays || profile.lessonDays.length === 0) {
+      return updatedStudent;
+    }
+
+    const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
+    const startDateObj = new Date(profile.startDate);
+    startDateObj.setHours(0, 0, 0, 0);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const endDateObj = profile.endDate ? new Date(profile.endDate) : null;
+    if (endDateObj) endDateObj.setHours(0, 0, 0, 0);
+
+    // 동기화 마감 기준일 = 오늘(today)과 종료일(endDate) 중 이른 날짜
+    const targetEndObj = endDateObj && endDateObj < today ? endDateObj : today;
+
+    const lessonDates = new Set<string>();
+
+    // 1. 수업 시작일부터 마감 기준일(오늘)까지 모든 날짜를 돌며 수업 요일에 해당하는 날짜 수집
+    let tempDate = new Date(startDateObj);
+    const maxIterations = 10000;
+    let iterations = 0;
+    while (tempDate <= targetEndObj && iterations < maxIterations) {
+      iterations++;
+      const yyyy = tempDate.getFullYear();
+      const mm = String(tempDate.getMonth() + 1).padStart(2, '0');
+      const dd = String(tempDate.getDate()).padStart(2, '0');
+      const dateStr = `${yyyy}-${mm}-${dd}`;
+
+      const dayName = dayNames[tempDate.getDay()];
+      const isScheduledDay = profile.lessonDays.includes(dayName);
+
+      const dayRecord = homework.find(d => d.date === dateStr);
+      let isLesson = isScheduledDay;
+      if (dayRecord && dayRecord.hasLesson !== undefined) {
+        isLesson = dayRecord.hasLesson;
+      }
+
+      if (isLesson) {
+        lessonDates.add(dateStr);
+      }
+
+      tempDate.setDate(tempDate.getDate() + 1);
+    }
+
+    // 2. 마감 기준일(오늘) 이후의 날짜에 대해서는, homework에 이미 기록이 있으면서 hasLesson이 true인 것만 수집
     homework.forEach(day => {
-      let isLesson = day.hasLesson;
-      if (isLesson === undefined) {
-        if (profile.lessonDays && profile.lessonDays.length > 0) {
-          const dayNames = ['일', '월', '화', '수', '목', '금', '토'];
-          const dateParts = day.date.split('-').map(Number);
-          const date = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-          const dayName = dayNames[date.getDay()];
-          
-          const startDateObj = profile.startDate ? new Date(profile.startDate) : null;
-          if (startDateObj) startDateObj.setHours(0,0,0,0);
-          const endDateObj = profile.endDate ? new Date(profile.endDate) : null;
-          if (endDateObj) endDateObj.setHours(0,0,0,0);
-          
-          const curr = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-          curr.setHours(0,0,0,0);
-          
-          const isWithinRange = (!startDateObj || curr >= startDateObj) && (!endDateObj || curr <= endDateObj);
-          isLesson = isWithinRange && profile.lessonDays.includes(dayName);
-        } else {
-          isLesson = false;
+      const [y, m, d] = day.date.split('-').map(Number);
+      const dayDate = new Date(y, m - 1, d);
+      dayDate.setHours(0, 0, 0, 0);
+
+      if (dayDate > targetEndObj) {
+        if (day.hasLesson === true) {
+          lessonDates.add(day.date);
         }
       }
-      
-      if (isLesson) {
-        lessonDates.push(day.date);
-      }
     });
+
+    const lessonDatesArray = Array.from(lessonDates).sort();
 
     let logsChanged = false;
     let updatedLogs = [...currentLogs];
 
-    // 2. 수업일인데 수업 일지(LessonLog)가 없으면 생성
-    lessonDates.forEach(dateStr => {
+    // 3. 수업일인데 수업 일지(LessonLog)가 없으면 생성
+    lessonDatesArray.forEach(dateStr => {
       const exists = updatedLogs.some(log => log.date === dateStr);
       if (!exists) {
         updatedLogs.push({
@@ -121,14 +155,14 @@ export const StudentJournalDashboard: React.FC<Props> = ({
       }
     });
 
-    // 3. 수업일이 아닌데 수업 일지가 등록되어 있으면 삭제
+    // 4. 수업일이 아닌데 수업 일지가 등록되어 있으면 삭제
     const initialLen = updatedLogs.length;
-    updatedLogs = updatedLogs.filter(log => lessonDates.includes(log.date));
+    updatedLogs = updatedLogs.filter(log => lessonDatesArray.includes(log.date));
     if (updatedLogs.length !== initialLen) {
       logsChanged = true;
     }
 
-    // 4. 날짜 순으로 정렬하고 세션(회차) 번호를 순차적으로 자동 계산하여 매김
+    // 5. 날짜 순으로 정렬하고 세션(회차) 번호를 순차적으로 자동 계산하여 매김
     updatedLogs.sort((a, b) => a.date.localeCompare(b.date));
     updatedLogs.forEach((log, index) => {
       if (log.session !== index + 1) {
@@ -137,9 +171,35 @@ export const StudentJournalDashboard: React.FC<Props> = ({
       }
     });
 
-    if (logsChanged) {
+    // 6. homework 배열에 수업일 날짜들의 레코드가 아예 없다면 자동으로 채워넣어 주기
+    let homeworkChanged = false;
+    let updatedHomework = [...homework];
+    lessonDatesArray.forEach(dateStr => {
+      const exists = updatedHomework.some(h => h.date === dateStr);
+      if (!exists) {
+        updatedHomework.push({
+          date: dateStr,
+          hasLesson: true,
+          tasks: [
+            { type: 'wake_up', completed: false },
+            { type: 'problem_30', completed: false },
+            { type: 'explanation', completed: false }
+          ]
+        });
+        homeworkChanged = true;
+      } else {
+        const idx = updatedHomework.findIndex(h => h.date === dateStr);
+        if (updatedHomework[idx].hasLesson !== true) {
+          updatedHomework[idx] = { ...updatedHomework[idx], hasLesson: true };
+          homeworkChanged = true;
+        }
+      }
+    });
+
+    if (logsChanged || homeworkChanged) {
       return {
         ...updatedStudent,
+        homework: updatedHomework,
         lessonLogs: updatedLogs
       };
     }
@@ -150,6 +210,17 @@ export const StudentJournalDashboard: React.FC<Props> = ({
     const synced = syncLessonLogs(updatedStudent);
     onUpdateStudent(synced);
   };
+
+  // 대시보드 로드 시 시작일부터 오늘까지의 모든 수업일지를 자동으로 보정하여 DB에 저장
+  React.useEffect(() => {
+    const synced = syncLessonLogs(student);
+    const isDifferent = JSON.stringify(student.lessonLogs) !== JSON.stringify(synced.lessonLogs) ||
+                        JSON.stringify(student.homework) !== JSON.stringify(synced.homework);
+
+    if (isDifferent) {
+      onUpdateStudent(synced);
+    }
+  }, [student.id, student.profile.lessonDays, student.profile.startDate, student.profile.endDate]);
 
   // --- Teacher Note Editing State ---
   const [isEditingNote, setIsEditingNote] = useState(false);
@@ -386,27 +457,43 @@ const handleCopyReport = async () => {
     setEditSchool(student.profile.school);
     setEditGrade(student.profile.grade);
     setEditStartDate(student.profile.startDate || new Date().toISOString().split('T')[0]);
+    setEditEndDate(student.profile.endDate || '');
     setEditLessonDays(student.profile.lessonDays || []);
     setEditLessonFeeCycle(student.profile.lessonFeeCycle !== undefined ? student.profile.lessonFeeCycle : '');
     setEditParentPhone(student.profile.parentPhone || '');
     setEditStudentPhone(student.profile.studentPhone || '');
+    setIsResettingPin(false);
+    setEditNewPin('');
     setIsEditingProfile(true);
   };
 
-  const handleProfileUpdate = () => {
+  const handleProfileUpdate = async () => {
+    if (isResettingPin && editNewPin.length !== 8) {
+      alert('PIN 번호는 반드시 8자리 숫자여야 합니다.');
+      return;
+    }
+
+    let updatedProfile = { 
+      ...student.profile, 
+      name: editName, 
+      school: editSchool, 
+      grade: editGrade,
+      startDate: editStartDate,
+      endDate: editEndDate,
+      lessonDays: editLessonDays.length > 0 ? editLessonDays : undefined,
+      lessonFeeCycle: editLessonFeeCycle !== '' ? Number(editLessonFeeCycle) : undefined,
+      parentPhone: editParentPhone || undefined,
+      studentPhone: editStudentPhone || undefined
+    };
+
+    if (isResettingPin && editNewPin) {
+      const hashedPin = await hashPin(editNewPin);
+      updatedProfile.pinHash = hashedPin;
+    }
+
     handleUpdateStudentAndSync({
       ...student,
-      profile: { 
-        ...student.profile, 
-        name: editName, 
-        school: editSchool, 
-        grade: editGrade,
-        startDate: editStartDate,
-        lessonDays: editLessonDays.length > 0 ? editLessonDays : undefined,
-        lessonFeeCycle: editLessonFeeCycle !== '' ? Number(editLessonFeeCycle) : undefined,
-        parentPhone: editParentPhone || undefined,
-        studentPhone: editStudentPhone || undefined
-      }
+      profile: updatedProfile
     });
     setIsEditingProfile(false);
   };
@@ -1000,15 +1087,17 @@ const handleCopyReport = async () => {
 
       <main className="max-w-4xl mx-auto p-4 space-y-6">
         {/* Toast Notification UI */}
-      {toast && (
-        <div 
-          className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-[100] transition-opacity duration-500 ease-in-out ${
-            toast.isVisible ? 'opacity-100' : 'opacity-0'
-          }`}
-        >
-          {toast.message}
-        </div>
-      )}
+        {toast && (
+          <div 
+            className={`fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-lg z-[100] transition-opacity duration-500 ease-in-out ${
+              toast.isVisible ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            {toast.message}
+          </div>
+        )}
+
+
         {activeTab === 'rankings' ? (
           <StudentRankings
             students={students}
@@ -1042,6 +1131,14 @@ const handleCopyReport = async () => {
                   </div>
                   {isAdmin && (
                     <div className="flex gap-2">
+                      <button 
+                        onClick={() => setIsParentReportModalOpen(true)}
+                        className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm flex items-center gap-1.5 text-xs font-bold"
+                        title="학부모 피드백 리포트 이미지 생성"
+                      >
+                        <BookOpen size={16} />
+                        <span className="hidden sm:inline">학부모 리포트</span>
+                      </button>
                       <button 
                         onClick={handleCopyReport}
                         className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm flex items-center gap-1"
@@ -1293,7 +1390,7 @@ const handleCopyReport = async () => {
                   </div>
                   <div className="space-y-4">
                     <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-1">이름</label>
+                      <label className="block text-xs font-bold text-gray-500 mb-1">이름 (필수)</label>
                       <input
                         placeholder="이름"
                         value={editName}
@@ -1303,7 +1400,7 @@ const handleCopyReport = async () => {
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                       <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">학교</label>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">학교 (선택)</label>
                         <input
                           placeholder="학교"
                           value={editSchool}
@@ -1312,7 +1409,7 @@ const handleCopyReport = async () => {
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">학년</label>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">학년 (선택)</label>
                         <input
                           placeholder="학년"
                           value={editGrade}
@@ -1321,18 +1418,28 @@ const handleCopyReport = async () => {
                         />
                       </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-gray-500 mb-1">수업 시작일</label>
-                      <input
-                        type="date"
-                        value={editStartDate}
-                        onChange={e => setEditStartDate(e.target.value)}
-                        className="w-full p-2 border rounded-lg text-sm"
-                      />
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">수업 시작일</label>
+                        <input
+                          type="date"
+                          value={editStartDate}
+                          onChange={e => setEditStartDate(e.target.value)}
+                          className="w-full p-2 border rounded-lg text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">수업 종료일 (선택)</label>
+                        <input
+                          type="date"
+                          value={editEndDate}
+                          onChange={e => setEditEndDate(e.target.value)}
+                          className="w-full p-2 border rounded-lg text-sm"
+                        />
+                      </div>
                     </div>
 
                     <div className="border-t pt-3 space-y-3">
-                      <span className="text-xs font-extrabold text-indigo-600 block uppercase tracking-wider">수업 일정 & 연락처 (선택 사항)</span>
                       <div>
                         <label className="block text-xs font-bold text-gray-500 mb-1.5">수업 요일 선택</label>
                         <div className="flex flex-wrap gap-1.5">
@@ -1396,6 +1503,43 @@ const handleCopyReport = async () => {
                           />
                         </div>
                       </div>
+                    </div>
+
+                    {/* PIN Reset */}
+                    <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 mt-2">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-bold text-gray-500">학생 접속용 PIN (필수)</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsResettingPin(!isResettingPin);
+                            setEditNewPin('');
+                          }}
+                          className="text-[10px] text-indigo-600 font-bold flex items-center gap-1 hover:underline"
+                        >
+                          <RefreshCw size={10} /> {isResettingPin ? '변경 취소' : '비밀번호 재설정'}
+                        </button>
+                      </div>
+
+                      {isResettingPin ? (
+                        <div className="animate-in fade-in duration-200 mt-2">
+                          <input
+                            type="text"
+                            value={editNewPin}
+                            onChange={e => setEditNewPin(e.target.value.replace(/[^0-9]/g, '').slice(0, 8))}
+                            className="w-full p-2 border border-indigo-200 rounded-lg text-xs font-mono tracking-widest text-indigo-600 font-bold focus:outline-none focus:border-indigo-500"
+                            placeholder="새 PIN 8자리 입력 (필수)"
+                            inputMode="numeric"
+                            minLength={8}
+                            maxLength={8}
+                            pattern="\d{8}"
+                            required
+                          />
+                          <p className="text-[10px] text-gray-400 mt-1">* 8자리 숫자로 입력해야 저장 가능합니다.</p>
+                        </div>
+                      ) : (
+                        <p className="text-[11px] text-gray-400 font-medium">********</p>
+                      )}
                     </div>
 
                     <button
@@ -1480,6 +1624,12 @@ const handleCopyReport = async () => {
           </>
         )}
       </main>
+
+      <ParentReportModal
+        isOpen={isParentReportModalOpen}
+        onClose={() => setIsParentReportModalOpen(false)}
+        student={student}
+      />
     </div>
   );
 };

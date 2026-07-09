@@ -196,6 +196,7 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
       let wakeUpCompleted = 0;
       let problem30Completed = 0;
       let explanationCompleted = 0;
+      let totalExplanationCount = 0;
 
       const studentStart = student.profile.startDate ? new Date(student.profile.startDate) : null;
       if (studentStart) studentStart.setHours(0, 0, 0, 0);
@@ -230,6 +231,9 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
               completedTasks += 1;
               explanationCompleted += 1;
             }
+            if (explanationTask) {
+              totalExplanationCount += explanationTask.count || (explanationTask.completed ? 1 : 0);
+            }
           }
         }
       });
@@ -251,14 +255,20 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
         explanationRate,
         completedTasks,
         totalTasks,
-        activeDays
+        activeDays,
+        totalExplanationCount
       };
     });
 
-    // 전체 달성률 내림차순 -> 이름 사전식 정렬
+    // 전체 달성률 내림차순 -> 총 해설 개수 내림차순 -> 이름 사전식 정렬
     const sorted = statsList.sort((a, b) => {
       if (b.overallRate !== a.overallRate) {
         return b.overallRate - a.overallRate;
+      }
+      const aExp = a.totalExplanationCount || 0;
+      const bExp = b.totalExplanationCount || 0;
+      if (bExp !== aExp) {
+        return bExp - aExp;
       }
       return a.name.localeCompare(b.name);
     });
@@ -266,10 +276,13 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
     // 공동 등수 연산
     let currentRank = 1;
     let prevRate = -1;
+    let prevExp = -1;
     return sorted.map((item, index) => {
-      if (item.overallRate !== prevRate) {
+      const expCount = item.totalExplanationCount || 0;
+      if (item.overallRate !== prevRate || expCount !== prevExp) {
         currentRank = index + 1;
         prevRate = item.overallRate;
+        prevExp = expCount;
       }
       return {
         ...item,
@@ -725,7 +738,9 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
                   </div>
                   <div className="flex flex-col items-center bg-purple-50/50 border border-purple-100 rounded-xl px-2.5 py-1.5 min-w-[65px]">
                     <span className="text-[9px] text-purple-500 font-bold">해설</span>
-                    <span className="text-xs font-black text-purple-700 mt-0.5">{item.explanationRate}%</span>
+                    <span className="text-xs font-black text-purple-700 mt-0.5">
+                      {item.explanationRate}% ({item.totalExplanationCount || 0}개)
+                    </span>
                   </div>
                 </div>
               </div>
