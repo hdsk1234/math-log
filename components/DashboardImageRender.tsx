@@ -16,6 +16,7 @@ export interface StudentStats {
   activeDays: number;
   totalExplanationCount?: number;
   rank?: number;
+  streak?: number;
 }
 
 interface DashboardImageRenderProps {
@@ -23,7 +24,7 @@ interface DashboardImageRenderProps {
   calculatedRankings: StudentStats[];
   dateStrings: string[];
   range: { start: Date; end: Date };
-  period: 'weekly' | 'monthly' | 'yearly';
+  period: 'weekly' | 'monthly' | 'yearly' | 'custom';
   targetDate?: Date;
   id?: string;
   sortBy?: 'rate' | 'name';
@@ -174,7 +175,7 @@ export const DashboardImageRender: React.FC<DashboardImageRenderProps> = ({
           <h1 className="text-3xl font-black text-gray-900 flex items-center gap-3 tracking-tight">
             <span className="text-indigo-600">❗</span>
             과제 체크 표
-            <span className="text-xl text-gray-500 font-bold ml-2">({period === 'weekly' ? '주간' : period === 'monthly' ? '월간' : '연간'})</span>
+            <span className="text-xl text-gray-500 font-bold ml-2">({period === 'weekly' ? '주간' : period === 'monthly' ? '월간' : period === 'yearly' ? '연간' : '기간설정'})</span>
           </h1>
           <p className="text-gray-600 mt-2 font-bold text-sm tracking-wide">
             [기상 / 30문제 / 해설] 집계 범위: {formatDateRangeString()}
@@ -239,7 +240,14 @@ export const DashboardImageRender: React.FC<DashboardImageRenderProps> = ({
                   ) : ''}
                 </td>
                 <td className="py-3 px-4 text-left">
-                  <div className="font-extrabold text-gray-900 text-base">{item.name}</div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="font-extrabold text-gray-900 text-base">{item.name}</div>
+                    {item.streak !== undefined && item.streak > 0 && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black bg-orange-50 text-orange-600 border border-orange-100 whitespace-nowrap">
+                        🔥 {item.streak}일
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-3 px-2 align-middle">
                   {isWeekly ? (

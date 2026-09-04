@@ -5,9 +5,12 @@ import { Calendar, CheckCircle2, Circle, AlertCircle, Play, Trash2, X } from 'lu
 interface Props {
   students: StudentData[];
   onUpdateStudent: (student: StudentData) => void;
+  currentUserEmail?: string | null;
 }
 
-export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStudent }) => {
+export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStudent, currentUserEmail }) => {
+  const isMasterTeacher = currentUserEmail?.toLowerCase() === 'hdsk1234@naver.com';
+
   const todayStr = new Date().toISOString().split('T')[0];
   const [selectedDate, setSelectedDate] = useState(todayStr);
   const [rawData, setRawData] = useState('');
@@ -35,6 +38,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
   };
 
   const handleResetDailyData = () => {
+    if (!isMasterTeacher) return;
     if (!window.confirm(`${selectedDate}의 모든 과제 기록을 삭제하시겠습니까?`)) return;
 
     // 1. 삭제 전 상태 백업
@@ -67,6 +71,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
 
   // 삭제 되돌리기(Undo) 액션 실행 함수
   const triggerUndo = () => {
+    if (!isMasterTeacher) return;
     if (!undoBackup || !undoTargetDate) return;
 
     students.forEach(student => {
@@ -86,6 +91,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
   };
 
   const handleProcessRawData = () => {
+    if (!isMasterTeacher) return;
     if (!rawData.trim()) return;
 
     const studentMap = new Map<string, { wakeUp: boolean; photoCount: number }>();
@@ -188,6 +194,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
   };
 
   const handleToggleHomework = (student: StudentData, type: HomeworkType) => {
+    if (!isMasterTeacher) return;
     const dailyData = getDailyData(student, selectedDate);
     let newHomework = [...student.homework];
 
@@ -224,7 +231,8 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     }
   };
 
-  const handleUpdateExplanation = (student: StudentData, count: number) => {
+  const handleUpdateExplanation = (student: StudentData, count: number, isDirectInput: boolean = false) => {
+    if (!isMasterTeacher) return;
     const dailyData = getDailyData(student, selectedDate);
     let newHomework = [...student.homework];
 
@@ -232,7 +240,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
       let newTasks = [...dailyData.tasks];
       const existingTaskIndex = newTasks.findIndex(t => t.type === 'explanation');
       
-      const newCount = newTasks[existingTaskIndex]?.count === count ? 0 : count;
+      const newCount = (!isDirectInput && newTasks[existingTaskIndex]?.count === count) ? 0 : count;
 
       if (existingTaskIndex !== -1) {
         newTasks[existingTaskIndex] = {
@@ -277,6 +285,56 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     const day = getDailyData(student, selectedDate);
     if (!day) return 0;
     return day.tasks.find(t => t.type === 'explanation')?.count || 0;
+  };
+
+  const getProblem30Count = (student: StudentData) => {
+    const day = getDailyData(student, selectedDate);
+    if (!day) return 0;
+    return day.tasks.find(t => t.type === 'problem_30')?.count || 0;
+  };
+
+  const handleUpdateProblem30Count = (student: StudentData, count: number) => {
+    if (!isMasterTeacher) return;
+    const dailyData = getDailyData(student, selectedDate);
+    let newHomework = [...student.homework];
+
+    if (dailyData) {
+      let newTasks = [...dailyData.tasks];
+      const existingTaskIndex = newTasks.findIndex(t => t.type === 'problem_30');
+      
+      const newCount = count < 0 ? 0 : count;
+
+      if (existingTaskIndex !== -1) {
+        newTasks[existingTaskIndex] = {
+          ...newTasks[existingTaskIndex],
+          completed: newCount > 0,
+          count: newCount
+        };
+      } else {
+        newTasks.push({ type: 'problem_30', completed: newCount > 0, count: newCount });
+      }
+      
+      const dayIndex = newHomework.findIndex(d => d.date === selectedDate);
+      newHomework[dayIndex] = { ...dailyData, tasks: newTasks };
+    } else {
+      const newTasks = [
+        { type: 'wake_up' as HomeworkType, completed: false },
+        { type: 'problem_30' as HomeworkType, completed: count > 0, count: count },
+        { type: 'explanation' as HomeworkType, completed: false, count: 0 },
+      ];
+
+      newHomework.push({
+        date: selectedDate,
+        tasks: newTasks
+      });
+    }
+
+    onUpdateStudent({ ...student, homework: newHomework });
+
+    // 수동 조작 시 매뉴얼 체크 리스트에서 해제
+    if (manualCheckList.includes(student.id)) {
+      setManualCheckList(prev => prev.filter(id => id !== student.id));
+    }
   };
 
   const activeStudents = students.filter(student => {
@@ -365,9 +423,19 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
               제출순
             </button>
           </div>
+          {!isMasterTeacher && (
+            <span className="ml-2 bg-amber-50 text-amber-700 border border-amber-200 text-[10px] px-2 py-0.5 rounded-md font-extrabold flex items-center gap-1 shadow-sm">
+              <AlertCircle size={10} /> 읽기 전용 (마스터 전용)
+            </span>
+          )}
           <button
             onClick={handleResetDailyData}
-            className="ml-auto px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded border border-red-100 transition-colors"
+            disabled={!isMasterTeacher}
+            className={`ml-auto px-3 py-1.5 text-xs font-bold rounded border transition-colors ${
+              isMasterTeacher 
+                ? 'text-red-600 bg-red-50 hover:bg-red-100 border-red-100' 
+                : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
+            }`}
           >
             기록 삭제
           </button>
@@ -382,12 +450,18 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
             <textarea
               value={rawData}
               onChange={(e) => setRawData(e.target.value)}
-              placeholder="여기에 카카오톡 대화 로그를 붙여넣으세요..."
+              disabled={!isMasterTeacher}
+              placeholder={isMasterTeacher ? "여기에 카카오톡 대화 로그를 붙여넣으세요..." : "마스터 교사만 카카오톡 로그 파싱을 이용할 수 있습니다."}
               className="flex-1 bg-gray-50 border border-gray-200 rounded p-2 text-xs h-16 resize-none focus:outline-none focus:ring-2 focus:ring-indigo-200"
             />
             <button
               onClick={handleProcessRawData}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white rounded px-4 py-2 flex flex-col items-center justify-center transition-colors"
+              disabled={!isMasterTeacher}
+              className={`rounded px-4 py-2 flex flex-col items-center justify-center transition-colors ${
+                isMasterTeacher 
+                  ? 'bg-indigo-600 hover:bg-indigo-700 text-white' 
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+              }`}
             >
               <Play size={16} className="mb-1" />
               <span className="text-xs font-bold">파싱 실행</span>
@@ -440,35 +514,78 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
                   <div className="flex justify-center">
                     <button 
                       onClick={() => handleToggleHomework(student, 'wake_up')}
-                      className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'wake_up') ? 'text-blue-600 bg-blue-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'}`}
+                      disabled={!isMasterTeacher}
+                      className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'wake_up') ? 'text-blue-600 bg-blue-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'} ${!isMasterTeacher ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
                       {getTaskStatus(student, 'wake_up') ? <CheckCircle2 size={22} /> : <Circle size={22} />}
                     </button>
                   </div>
                   
-                  <div className="flex justify-center">
+                  <div className="flex justify-center items-center gap-1">
                     <button 
                       onClick={() => handleToggleHomework(student, 'problem_30')}
-                      className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'problem_30') ? 'text-emerald-600 bg-emerald-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'}`}
+                      disabled={!isMasterTeacher}
+                      className={`p-1.5 rounded-full transition-all ${getTaskStatus(student, 'problem_30') ? 'text-emerald-600 bg-emerald-100' : 'text-gray-300 hover:text-gray-400 hover:bg-gray-200'} ${!isMasterTeacher ? 'cursor-not-allowed opacity-60' : ''}`}
                     >
-                      {getTaskStatus(student, 'problem_30') ? <CheckCircle2 size={22} /> : <Circle size={22} />}
+                      {getTaskStatus(student, 'problem_30') ? <CheckCircle2 size={20} /> : <Circle size={20} />}
                     </button>
+                    {isMasterTeacher ? (
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={getProblem30Count(student) || ''}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                          handleUpdateProblem30Count(student, val);
+                        }}
+                        className="w-12 text-center text-xs font-bold border border-gray-200 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-emerald-500 bg-gray-50"
+                      />
+                    ) : (
+                      <span className="text-xs font-bold text-gray-500">
+                        {getProblem30Count(student)}개
+                      </span>
+                    )}
                   </div>
 
-                  <div className="flex justify-center gap-1">
-                    {[1, 2, 3, 4, 5].map(num => (
-                      <button
-                        key={num}
-                        onClick={() => handleUpdateExplanation(student, num)}
-                        className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all ${
-                          getExplanationCount(student) === num
-                            ? 'bg-purple-500 text-white'
-                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
-                        }`}
-                      >
-                        {num}
-                      </button>
-                    ))}
+                  <div className="flex justify-center items-center gap-1.5">
+                    <div className="flex justify-center gap-1">
+                      {[1, 2, 3, 4, 5].map(num => (
+                        <button
+                          key={num}
+                          onClick={() => handleUpdateExplanation(student, num)}
+                          disabled={!isMasterTeacher}
+                          className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold transition-all ${
+                            getExplanationCount(student) === num
+                              ? 'bg-purple-500 text-white'
+                              : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                          } ${!isMasterTeacher ? 'cursor-not-allowed opacity-60' : ''}`}
+                        >
+                          {num}
+                        </button>
+                      ))}
+                    </div>
+                    {isMasterTeacher ? (
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={getExplanationCount(student) || ''}
+                        placeholder="직접"
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                          handleUpdateExplanation(student, val, true);
+                        }}
+                        className="w-12 text-center text-xs font-bold border border-gray-200 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-purple-500 bg-gray-50"
+                      />
+                    ) : (
+                      getExplanationCount(student) > 5 && (
+                        <span className="text-xs font-bold text-purple-600 ml-1">
+                          ({getExplanationCount(student)}개)
+                        </span>
+                      )
+                    )}
                   </div>
                 </div>
               </React.Fragment>

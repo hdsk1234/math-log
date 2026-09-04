@@ -3,6 +3,7 @@ import { X, Copy, Download, Loader2, Calendar, Users, FileText } from 'lucide-re
 import { toPng, toBlob } from 'html-to-image';
 import { StudentData, HomeworkType } from '../types';
 import { DashboardImageRender, StudentStats } from './DashboardImageRender';
+import { calculateStreak } from '../constants';
 
 interface DashboardExportModalProps {
   isOpen: boolean;
@@ -15,7 +16,7 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
   onClose,
   students,
 }) => {
-  const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('weekly');
+  const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly' | 'custom'>('weekly');
   const [showGraduated, setShowGraduated] = useState<boolean>(false);
   const [isGenerating, setIsGenerating] = useState<boolean>(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -31,11 +32,34 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
     return `${year}-${month}-${day}`;
   });
 
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 7);
+    const year = yesterday.getFullYear();
+    const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+    const day = String(yesterday.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    const year = yesterday.getFullYear();
+    const month = String(yesterday.getMonth() + 1).padStart(2, '0');
+    const day = String(yesterday.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+
   const baseDate = useMemo(() => {
+    if (period === 'custom') {
+      const d = new Date(customEndDate);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    }
     const d = new Date(targetDateString);
     d.setHours(0, 0, 0, 0);
     return d;
-  }, [targetDateString]);
+  }, [targetDateString, period, customEndDate]);
 
   // 2. 조회 기간 범위 계산 (기준 날짜 기반)
   const range = useMemo(() => {
@@ -55,13 +79,19 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
       const end = new Date(date.getFullYear(), date.getMonth() + 1, 0);
       end.setHours(23, 59, 59, 999);
       return { start, end };
-    } else {
+    } else if (period === 'yearly') {
       const start = new Date(date.getFullYear(), 0, 1);
       const end = new Date(date.getFullYear(), 11, 31);
       end.setHours(23, 59, 59, 999);
       return { start, end };
+    } else { // custom
+      const start = new Date(customStartDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(customEndDate);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
     }
-  }, [period, baseDate]);
+  }, [period, baseDate, customStartDate, customEndDate]);
 
   // 3. 날짜 문자열 배열 생성 (범위 내 전체 일자)
   const dateStrings = useMemo(() => {
@@ -154,6 +184,7 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
       const wakeUpRate = activeDays === 0 ? 0 : Math.round((wakeUpCompleted / activeDays) * 100);
       const problem30Rate = activeDays === 0 ? 0 : Math.round((problem30Completed / activeDays) * 100);
       const explanationRate = activeDays === 0 ? 0 : Math.round((explanationCompleted / activeDays) * 100);
+      const streak = calculateStreak(student, baseDate);
 
       return {
         id: student.id,
@@ -168,7 +199,8 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
         completedTasks,
         totalTasks,
         activeDays,
-        totalExplanationCount
+        totalExplanationCount,
+        streak
       };
     });
 
@@ -379,22 +411,45 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
           
           {/* Controls Panel (Left side) */}
           <div className="w-full lg:w-80 flex flex-col gap-5 flex-shrink-0 bg-gray-50 p-5 rounded-2xl border border-gray-100">
-            {/* 1. Date Picker */}
-            <div className="space-y-1.5">
-              <label className="text-xs font-black text-gray-500 uppercase tracking-wider block">기준 날짜 선택</label>
-              <input
-                type="date"
-                value={targetDateString}
-                onChange={(e) => setTargetDateString(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
-              />
-            </div>
+            {/* 1. Date Picker / Custom Range Picker */}
+            {period === 'custom' ? (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-gray-500 uppercase tracking-wider block">시작 날짜 선택</label>
+                  <input
+                    type="date"
+                    value={customStartDate}
+                    onChange={(e) => setCustomStartDate(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-black text-gray-500 uppercase tracking-wider block">종료 날짜 선택</label>
+                  <input
+                    type="date"
+                    value={customEndDate}
+                    onChange={(e) => setCustomEndDate(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                  />
+                </div>
+              </>
+            ) : (
+              <div className="space-y-1.5">
+                <label className="text-xs font-black text-gray-500 uppercase tracking-wider block">기준 날짜 선택</label>
+                <input
+                  type="date"
+                  value={targetDateString}
+                  onChange={(e) => setTargetDateString(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3.5 py-2 text-sm font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                />
+              </div>
+            )}
 
             {/* 2. Period Selector */}
             <div className="space-y-1.5">
               <label className="text-xs font-black text-gray-500 uppercase tracking-wider block">조회 기간 구분</label>
-              <div className="grid grid-cols-3 bg-white p-1 rounded-xl border border-gray-200 gap-1">
-                {(['weekly', 'monthly', 'yearly'] as const).map((p) => (
+              <div className="grid grid-cols-4 bg-white p-1 rounded-xl border border-gray-200 gap-1">
+                {(['weekly', 'monthly', 'yearly', 'custom'] as const).map((p) => (
                   <button
                     key={p}
                     onClick={() => setPeriod(p)}
@@ -404,7 +459,7 @@ export const DashboardExportModal: React.FC<DashboardExportModalProps> = ({
                         : 'text-gray-500 hover:text-gray-700'
                     }`}
                   >
-                    {p === 'weekly' ? '주간' : p === 'monthly' ? '월간' : '연간'}
+                    {p === 'weekly' ? '주간' : p === 'monthly' ? '월간' : p === 'yearly' ? '연간' : '설정'}
                   </button>
                 ))}
               </div>
