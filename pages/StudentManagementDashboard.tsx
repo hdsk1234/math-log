@@ -4,8 +4,10 @@ import { StudentData, HomeworkType } from '../types';
 import { StudentList } from '../components/StudentList';
 import { QuickUpdateDashboard } from '../components/QuickUpdateDashboard';
 import { StudentRankings } from '../components/StudentRankings';
-import { GraduationCap, LogOut, List, Zap, Copy, Trophy, Shield } from 'lucide-react';
+import { GraduationCap, LogOut, List, Zap, Copy, Trophy, Shield, Bot, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
 import { DashboardExportModal } from '../components/DashboardExportModal';
+import { TelegramLogTab } from '../components/TelegramLogTab';
+import { HomeworkImageFeed } from '../components/HomeworkImageFeed';
 
 interface Props {
   students: StudentData[];
@@ -22,9 +24,11 @@ interface Props {
   ) => void;
   onUpdateStudent: (student: StudentData) => void;
   onDeleteStudent: (id: string) => void;
+  onToggleFavorite?: (id: string) => void;
   onLogout: () => void;
   canEdit?: boolean;
   userEmail?: string | null;
+  teacherName?: string | null;
 }
 
 export const StudentManagementDashboard: React.FC<Props> = ({
@@ -33,25 +37,30 @@ export const StudentManagementDashboard: React.FC<Props> = ({
   onAddStudent,
   onUpdateStudent,
   onDeleteStudent,
+  onToggleFavorite,
   onLogout,
   canEdit = false,
   userEmail = null,
+  teacherName = null,
 }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const viewMode = (searchParams.get('tab') as 'list' | 'quick' | 'rankings') || 'list';
-  const setViewMode = (mode: 'list' | 'quick' | 'rankings') => setSearchParams({ tab: mode });
+  const viewMode = (searchParams.get('tab') as 'list' | 'quick' | 'rankings' | 'logs') || 'list';
+  const setViewMode = (mode: 'list' | 'quick' | 'rankings' | 'logs') => setSearchParams({ tab: mode });
   const [showToast, setShowToast] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [showRawLogs, setShowRawLogs] = useState(false);
 
-  // Redirect if they land on quick update but don't have canEdit permissions
+  const isMasterTeacher = userEmail?.toLowerCase() === 'hdsk1234@naver.com';
+
+  // Redirect if they land on quick update but don't have canEdit or master permissions
   useEffect(() => {
-    if (!canEdit && viewMode === 'quick') {
+    if ((!canEdit || !isMasterTeacher) && viewMode === 'quick') {
       setSearchParams({ tab: 'list' });
     }
-  }, [canEdit, viewMode, setSearchParams]);
+  }, [canEdit, isMasterTeacher, viewMode, setSearchParams]);
 
-  const handleCopyAssignment = async () => {
+  const handleCopyHomework = async () => {
     const today = new Date(); // 오늘 날짜 객체
     const currentDay = today.getDay(); // 0: 일요일 ~ 6: 토요일
     const yesterday = new Date(today);
@@ -68,7 +77,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
     const dateRangeStr = `${weekStart.getMonth() + 1}월 ${weekStart.getDate()}일 ~ ${weekEnd.getMonth() + 1}월 ${weekEnd.getDate()}일`;
     const todayLabel = `${yesterday.getMonth() + 1}월 ${yesterday.getDate()}일`;
 
-    const header = `❗과제 체크 표(${dateRangeStr})\n\n[기상/30문제/해설] ${todayLabel}\n\n`;
+    const header = `❗숙제 체크 표(${dateRangeStr})\n\n[기상/30문제/해설] ${todayLabel}\n\n`;
 
     // 가장 가까운 과거의 일요일부터 어제까지의 날짜 배열 생성
     const daysToFetch = currentDay === 0 ? 7 : currentDay;
@@ -178,7 +187,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               >
                 <List size={14} /> 학생 관리
               </button>
-              {canEdit && (
+              {canEdit && isMasterTeacher && (
                 <button
                   onClick={() => setViewMode('quick')}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'quick'
@@ -198,6 +207,15 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               >
                 <Trophy size={14} /> 과제 순위
               </button>
+              <button
+                onClick={() => setViewMode('logs')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'logs'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                <ImageIcon size={14} /> 제출 이미지
+              </button>
             </div>
           </div>
 
@@ -209,10 +227,12 @@ export const StudentManagementDashboard: React.FC<Props> = ({
                 title="마이페이지로 이동"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
-                <span className="hidden sm:inline">{userEmail} (교사)</span>
-                <span className="sm:hidden">{userEmail.split('@')[0]} (교사)</span>
+                <span className="hidden sm:inline">{teacherName || userEmail} (교사)</span>
+                <span className="sm:hidden">{(teacherName || userEmail).split('@')[0]} (교사)</span>
               </button>
             )}
+
+
             <button
               onClick={() => setIsExportModalOpen(true)}
               className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 p-2 sm:px-3 sm:py-1.5 rounded-md transition-all border border-gray-200 cursor-pointer"
@@ -222,16 +242,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               <span className="hidden md:inline">과제 현황 이미지 생성</span>
               <span className="md:hidden text-[10px]">이미지 생성</span>
             </button>
-            {userEmail?.toLowerCase() === 'hdsk1234@naver.com' && (
-              <button
-                onClick={() => navigate('/admin')}
-                className="flex items-center gap-1.5 text-xs sm:text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 p-2 sm:px-3 sm:py-1.5 rounded-md transition-colors"
-                title="관리자 설정"
-              >
-                <Shield size={16} />
-                <span className="hidden sm:inline">관리자 페이지</span>
-              </button>
-            )}
+
             <button
               onClick={onLogout}
               className="text-gray-400 hover:text-gray-600 p-1.5 sm:p-2 rounded-full hover:bg-gray-100 transition-colors"
@@ -254,7 +265,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           <List size={20} />
           <span>학생 관리</span>
         </button>
-        {canEdit && (
+        {canEdit && isMasterTeacher && (
           <button
             onClick={() => setViewMode('quick')}
             className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
@@ -274,6 +285,15 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           <Trophy size={20} />
           <span>과제 순위</span>
         </button>
+        <button
+          onClick={() => setViewMode('logs')}
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            viewMode === 'logs' ? 'text-indigo-600' : 'text-gray-400'
+          }`}
+        >
+          <ImageIcon size={20} />
+          <span>제출 이미지</span>
+        </button>
       </div>
 
       {viewMode === 'list' && (
@@ -283,15 +303,18 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           onAddStudent={onAddStudent}
           onUpdateStudent={onUpdateStudent}
           onDeleteStudent={onDeleteStudent}
+          onToggleFavorite={onToggleFavorite}
           canEdit={canEdit}
         />
       )}
-      {viewMode === 'quick' && (
+      {viewMode === 'quick' && isMasterTeacher && (
         <QuickUpdateDashboard
           students={displayStudents}
           onUpdateStudent={onUpdateStudent}
+          currentUserEmail={userEmail}
         />
       )}
+
       {viewMode === 'rankings' && (
         <StudentRankings
           students={students}
@@ -299,6 +322,34 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           onUpdateStudent={onUpdateStudent}
           role="teacher"
         />
+      )}
+      {viewMode === 'logs' && (
+        <div className="space-y-6">
+          <HomeworkImageFeed students={displayStudents} onUpdateStudent={onUpdateStudent} />
+
+          <div className="max-w-4xl mx-auto px-2 sm:px-4 pb-8">
+            <div className="border border-gray-200 rounded-2xl bg-white overflow-hidden shadow-sm">
+              <button
+                onClick={() => setShowRawLogs(!showRawLogs)}
+                className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 transition-colors flex items-center justify-between text-xs font-bold text-gray-600 cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <Bot size={16} className="text-gray-500" />
+                  텔레그램 웹훅 상세 수신 로그 (서버 디버깅용)
+                </span>
+                <div className="flex items-center gap-1 text-[11px] text-gray-400">
+                  <span>{showRawLogs ? '숨기기' : '펼쳐보기'}</span>
+                  {showRawLogs ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                </div>
+              </button>
+              {showRawLogs && (
+                <div className="p-2 border-t border-gray-100 bg-gray-50/50">
+                  <TelegramLogTab />
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       <div

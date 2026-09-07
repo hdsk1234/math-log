@@ -4,6 +4,7 @@ import { Card } from './Card';
 import { Trophy, Search, Users, Calendar, Star, Award, Camera, ClipboardCheck } from 'lucide-react';
 import { toPng, toBlob } from 'html-to-image';
 import { DashboardImageRender, StudentStats } from './DashboardImageRender';
+import { calculateStreak } from '../constants';
 
 interface Props {
   students: StudentData[];
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, onUpdateStudent, role = 'guest' }) => {
-  const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly'>('weekly');
+  const [period, setPeriod] = useState<'weekly' | 'monthly' | 'yearly' | 'custom'>('weekly');
   const [searchQuery, setSearchQuery] = useState('');
 
   // 1. 기준일(오늘) 정보 설정
@@ -32,6 +33,21 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
 
   const currentYear = todayMidnight.getFullYear();
   const currentMonth = todayMidnight.getMonth() + 1; // 1-indexed
+
+  const [customStartDate, setCustomStartDate] = useState<string>(() => {
+    const d = new Date(todayMidnight);
+    d.setDate(d.getDate() - 7);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
+  const [customEndDate, setCustomEndDate] = useState<string>(() => {
+    const year = todayMidnight.getFullYear();
+    const month = String(todayMidnight.getMonth() + 1).padStart(2, '0');
+    const day = String(todayMidnight.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   // 2. 연도, 월, 주차 선택 상태 및 졸업생 토글 상태
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
@@ -138,13 +154,19 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
       const rawEnd = new Date(selectedYear, selectedMonth, 0);
       const end = rawEnd > yesterdayMidnight ? yesterdayMidnight : rawEnd;
       return { start, end };
-    } else { // yearly
+    } else if (period === 'yearly') {
       const start = new Date(selectedYear, 0, 1);
       const rawEnd = new Date(selectedYear, 11, 31);
       const end = rawEnd > yesterdayMidnight ? yesterdayMidnight : rawEnd;
       return { start, end };
+    } else { // custom
+      const start = new Date(customStartDate);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(customEndDate);
+      end.setHours(23, 59, 59, 999);
+      return { start, end };
     }
-  }, [period, selectedYear, selectedMonth, selectedWeekIndex, weeksForMonth, yesterdayMidnight, todayMidnight]);
+  }, [period, selectedYear, selectedMonth, selectedWeekIndex, weeksForMonth, yesterdayMidnight, todayMidnight, customStartDate, customEndDate]);
 
   // 9. 해당 범위 내 일자 배열 생성 (YYYY-MM-DD 문자열 형태)
   const dateStrings = useMemo(() => {
@@ -242,6 +264,7 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
       const wakeUpRate = activeDays === 0 ? 0 : Math.round((wakeUpCompleted / activeDays) * 100);
       const problem30Rate = activeDays === 0 ? 0 : Math.round((problem30Completed / activeDays) * 100);
       const explanationRate = activeDays === 0 ? 0 : Math.round((explanationCompleted / activeDays) * 100);
+      const streak = calculateStreak(student, range.end);
 
       return {
         id: student.id,
@@ -256,7 +279,8 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
         completedTasks,
         totalTasks,
         activeDays,
-        totalExplanationCount
+        totalExplanationCount,
+        streak
       };
     });
 
@@ -482,6 +506,16 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
             >
               연간
             </button>
+            <button
+              onClick={() => setPeriod('custom')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                period === 'custom'
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              기간설정
+            </button>
           </div>
         </div>
       </div>
@@ -494,43 +528,64 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
         {/* 분석 기간 필터 컨트롤바 */}
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">분석 기준일:</span>
-            
-            {/* 연도 */}
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
-            >
-              {years.map(y => (
-                <option key={y} value={y}>{y}년</option>
-              ))}
-            </select>
+            {period === 'custom' ? (
+              <>
+                <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">시작일:</span>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                />
+                <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">종료일:</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                />
+              </>
+            ) : (
+              <>
+                <span className="text-xs font-extrabold text-gray-400 uppercase tracking-wider">분석 기준일:</span>
+                
+                {/* 연도 */}
+                <select
+                  value={selectedYear}
+                  onChange={(e) => setSelectedYear(Number(e.target.value))}
+                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                >
+                  {years.map(y => (
+                    <option key={y} value={y}>{y}년</option>
+                  ))}
+                </select>
 
-            {/* 월 (연간 순위일 때는 숨김) */}
-            {period !== 'yearly' && (
-              <select
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(Number(e.target.value))}
-                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
-              >
-                {months.map(m => (
-                  <option key={m} value={m}>{m}월</option>
-                ))}
-              </select>
-            )}
+                {/* 월 (연간 순위일 때는 숨김) */}
+                {period !== 'yearly' && (
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(Number(e.target.value))}
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                  >
+                    {months.map(m => (
+                      <option key={m} value={m}>{m}월</option>
+                    ))}
+                  </select>
+                )}
 
-            {/* 주차 (주간 순위 탭 활성 시에만 노출) */}
-            {period === 'weekly' && weeksForMonth.length > 0 && (
-              <select
-                value={selectedWeekIndex}
-                onChange={(e) => setSelectedWeekIndex(Number(e.target.value))}
-                className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
-              >
-                {weeksForMonth.map(w => (
-                  <option key={w.index} value={w.index}>{w.label}</option>
-                ))}
-              </select>
+                {/* 주차 (주간 순위 탭 활성 시에만 노출) */}
+                {period === 'weekly' && weeksForMonth.length > 0 && (
+                  <select
+                    value={selectedWeekIndex}
+                    onChange={(e) => setSelectedWeekIndex(Number(e.target.value))}
+                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-500 transition-all cursor-pointer"
+                  >
+                    {weeksForMonth.map(w => (
+                      <option key={w.index} value={w.index}>{w.label}</option>
+                    ))}
+                  </select>
+                )}
+              </>
             )}
           </div>
 
@@ -553,9 +608,11 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
           <Calendar size={16} />
           <span>실제 집계 범위: <span className="underline decoration-indigo-300">{formatDateRangeString()}</span></span>
           <span className="ml-auto text-[10px] text-indigo-500 bg-white px-2.5 py-0.5 rounded-full border border-indigo-100">
-            {selectedYear === currentYear && (period === 'yearly' || selectedMonth === currentMonth)
-              ? (lastUpdateTime ? `최근 업데이트: ${lastUpdateTime}` : '실시간 집계 중')
-              : '기록 보관됨'}
+            {period === 'custom'
+              ? (range.end >= todayMidnight ? (lastUpdateTime ? `최근 업데이트: ${lastUpdateTime}` : '실시간 집계 중') : '기록 보관됨')
+              : selectedYear === currentYear && (period === 'yearly' || selectedMonth === currentMonth)
+                ? (lastUpdateTime ? `최근 업데이트: ${lastUpdateTime}` : '실시간 집계 중')
+                : '기록 보관됨'}
           </span>
         </div>
 
@@ -583,7 +640,7 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
             <div className="absolute top-0 right-0 w-20 h-20 bg-yellow-400/10 rounded-full -mr-8 -mt-8 blur-lg"></div>
             <div className="flex items-center justify-between mb-3 relative z-10">
               <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">
-                {period === 'weekly' ? '이주의 학생' : period === 'monthly' ? '이달의 학생' : '올해의 학생'}
+                {period === 'weekly' ? '이주의 학생' : period === 'monthly' ? '이달의 학생' : period === 'yearly' ? '올해의 학생' : '선택 기간의 학생'}
               </span>
               <div className="w-8 h-8 rounded-full bg-yellow-50 flex items-center justify-center text-yellow-600">
                 <Trophy size={16} />
@@ -701,6 +758,11 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
                       </span>
                       {item.isFavorite && (
                         <Star size={14} className="text-yellow-400 fill-yellow-400" />
+                      )}
+                      {item.streak !== undefined && item.streak > 0 && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-black bg-orange-50 text-orange-600 border border-orange-100 whitespace-nowrap animate-pulse">
+                          🔥 {item.streak}일
+                        </span>
                       )}
                     </div>
                     <span className="text-[10px] text-gray-400 font-bold block mt-0.5">

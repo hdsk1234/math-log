@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   StudentData, 
@@ -15,13 +14,14 @@ import { ComparisonChart } from '../components/ComparisonChart';
 import { MasteryChart } from '../components/MasteryChart';
 import { LessonTable } from '../components/LessonTable';
 import { TextbookTracker } from '../components/TextbookTracker';
-import { UpcomingAssignments } from '../components/UpcomingAssignments';
+import { UpcomingHomework } from '../components/UpcomingHomework';
 import { Card } from '../components/Card';
 import { useNavigate } from 'react-router-dom';
 import { StudentRankings } from '../components/StudentRankings';
 import { ParentReportModal } from '../components/ParentReportModal';
+import { HomeworkImageFeed } from '../components/HomeworkImageFeed';
 import { 
-  GraduationCap, LogOut, Settings, ArrowLeft, Pencil, X, Edit2, Copy, Trophy, BookOpen, Send
+  GraduationCap, LogOut, Settings, ArrowLeft, Pencil, X, Edit2, Copy, Trophy, BookOpen, Send, RefreshCw
 } from 'lucide-react';
 
 interface Props {
@@ -36,7 +36,16 @@ interface Props {
   userEmail?: string | null;
 }
 
-export const StudentJournalDashboard: React.FC<Props> = ({
+// PIN 해시를 위한 임시 헬퍼 함수
+async function hashPin(pin: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(pin);
+  const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+export const StudentDetailDashboard: React.FC<Props> = ({
   student,
   students = [],
   currentUserRole,
@@ -50,7 +59,7 @@ export const StudentJournalDashboard: React.FC<Props> = ({
   if (!student) return <div>Loading...</div>;
   
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<'journal' | 'rankings'>('journal');
+  const [activeTab, setActiveTab] = useState<'journal' | 'rankings' | 'images'>('journal');
   const isAdmin = currentUserRole === 'teacher' && !!canEdit;
   const [isParentReportModalOpen, setIsParentReportModalOpen] = useState(false);
 
@@ -330,7 +339,7 @@ export const StudentJournalDashboard: React.FC<Props> = ({
     }
 
     return [
-      { category: '기상 과제', student: studentWakeUp, average: avgWakeUp },
+      { category: '기상 숙제', student: studentWakeUp, average: avgWakeUp },
       { category: '매일 30문제', student: studentProblem, average: avgProblem },
       { category: '해설 작성', student: studentExplanation, average: avgExplanation },
     ];
@@ -338,7 +347,7 @@ export const StudentJournalDashboard: React.FC<Props> = ({
 
   // --- Handlers ---
 
-const handleCopyReport = async () => {
+  const handleCopyReport = async () => {
     if (!isAdmin) return;
 
     const today = new Date();
@@ -346,7 +355,7 @@ const handleCopyReport = async () => {
     const dateStr = today.getDate();
     const sessionCount = (student.lessonLogs?.length || 0);
 
-    // 1. 당월 과제 달성률 계산
+    // 1. 당월 숙제 달성률 계산
     const stats = {
       wake_up: { total: 0, completed: 0 },
       problem_30: { total: 0, completed: 0 },
@@ -391,10 +400,10 @@ const handleCopyReport = async () => {
     const lessonContent = latestLog?.content || '1. 내용을 입력해주세요.';
 
     // 2. 텍스트 포맷팅
-    let reportText = `${month}월 ${dateStr}일 (${sessionCount}회차) 수업 내용 및 과제 안내드립니다!\n\n`;
-    reportText += `❗ 과제1: 기상인증 성공률: ${formatRate('wake_up')}\n`;
-    reportText += `❗ 과제2: 30문제 풀이 성공률: ${formatRate('problem_30')}\n`;
-    reportText += `❗ 과제3: 1일 1제 해설 작성 성공률: ${formatRate('explanation')}\n\n`;
+    let reportText = `${month}월 ${dateStr}일 (${sessionCount}회차) 수업 내용 및 숙제 안내드립니다!\n\n`;
+    reportText += `❗ 숙제1: 기상인증 성공률: ${formatRate('wake_up')}\n`;
+    reportText += `❗ 숙제2: 30문제 풀이 성공률: ${formatRate('problem_30')}\n`;
+    reportText += `❗ 숙제3: 1일 1제 해설 작성 성공률: ${formatRate('explanation')}\n\n`;
 
     reportText += `✅ 수업 진행 내용\n${lessonContent}\n\n`;
     reportText += `✅ 숙제\n`;
@@ -417,7 +426,8 @@ const handleCopyReport = async () => {
 
     // 숙제를 카테고리별로 그룹화 (요일 포함 적용)
     const categoryMap: Record<string, string[]> = {};
-    student.upcomingAssignments?.schedules?.forEach(schedule => {
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    currentUpcoming.schedules?.forEach(schedule => {
       const dateWithDay = getDateWithDay(schedule.date);
       schedule.categories.forEach(category => {
         if (!categoryMap[category.title]) categoryMap[category.title] = [];
@@ -643,9 +653,10 @@ const handleCopyReport = async () => {
     onUpdateStudent({ ...student, textbooks });
   };
 
-  // --- Upcoming Assignments Handlers ---
-  const addAssignmentSchedule = () => {
-    const nextSchedules = [...(student.upcomingAssignments?.schedules || [])];
+  // --- Upcoming Homework Handlers ---
+  const addHomeworkSchedule = () => {
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextSchedules = [...(currentUpcoming.schedules || [])];
     
     // Auto-calculate next date (Next day after last schedule, or Today if empty)
     let nextDateStr = '';
@@ -656,12 +667,10 @@ const handleCopyReport = async () => {
       const parts = lastSchedule.date.split('/');
       
       if (parts.length === 2) {
-        // Assume format is M/D
         const m = parseInt(parts[0]);
         const d = parseInt(parts[1]);
         
         if (!isNaN(m) && !isNaN(d)) {
-          // Create date object (Using current year)
           const lastDate = new Date(today.getFullYear(), m - 1, d);
           lastDate.setDate(lastDate.getDate() + 1); // Add 1 day
           nextDateStr = `${lastDate.getMonth() + 1}/${lastDate.getDate()}`;
@@ -669,7 +678,6 @@ const handleCopyReport = async () => {
       }
     }
 
-    // Default to today if parsing failed or no previous schedules
     if (!nextDateStr) {
        nextDateStr = `${today.getMonth() + 1}/${today.getDate()}`;
     }
@@ -683,73 +691,80 @@ const handleCopyReport = async () => {
     });
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, schedules: nextSchedules }
+      upcomingHomework: { ...currentUpcoming, schedules: nextSchedules }
     });
   };
 
-  const deleteAssignmentSchedule = (sIdx: number) => {
-    const nextSchedules = [...(student.upcomingAssignments?.schedules || [])];
+  const deleteHomeworkSchedule = (sIdx: number) => {
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextSchedules = [...(currentUpcoming.schedules || [])];
     nextSchedules.splice(sIdx, 1);
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, schedules: nextSchedules }
+      upcomingHomework: { ...currentUpcoming, schedules: nextSchedules }
     });
   };
 
-  const updateAssignmentDate = (sIdx: number, newDate: string) => {
-    const nextSchedules = [...(student.upcomingAssignments?.schedules || [])];
+  const updateHomeworkDate = (sIdx: number, newDate: string) => {
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextSchedules = [...(currentUpcoming.schedules || [])];
     nextSchedules[sIdx] = { ...nextSchedules[sIdx], date: newDate };
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, schedules: nextSchedules }
+      upcomingHomework: { ...currentUpcoming, schedules: nextSchedules }
     });
   };
 
-  const addAssignmentItem = (sIdx: number, cIdx: number) => {
-    const nextSchedules = [...(student.upcomingAssignments?.schedules || [])];
+  const addHomeworkItem = (sIdx: number, cIdx: number) => {
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextSchedules = [...(currentUpcoming.schedules || [])];
     const category = nextSchedules[sIdx].categories[cIdx];
-    category.items.push({ text: '새 과제', completed: false });
+    category.items.push({ text: '새 숙제', completed: false });
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, schedules: nextSchedules }
+      upcomingHomework: { ...currentUpcoming, schedules: nextSchedules }
     });
   };
 
-  const updateAssignmentItem = (sIdx: number, cIdx: number, iIdx: number, text: string) => {
-    const nextSchedules = [...(student.upcomingAssignments?.schedules || [])];
+  const updateHomeworkItem = (sIdx: number, cIdx: number, iIdx: number, text: string) => {
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextSchedules = [...(currentUpcoming.schedules || [])];
     nextSchedules[sIdx].categories[cIdx].items[iIdx] = {
       ...nextSchedules[sIdx].categories[cIdx].items[iIdx],
       text
     };
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, schedules: nextSchedules }
+      upcomingHomework: { ...currentUpcoming, schedules: nextSchedules }
     });
   };
 
-  const deleteAssignmentItem = (sIdx: number, cIdx: number, iIdx: number) => {
-    const nextSchedules = [...(student.upcomingAssignments?.schedules || [])];
+  const deleteHomeworkItem = (sIdx: number, cIdx: number, iIdx: number) => {
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextSchedules = [...(currentUpcoming.schedules || [])];
     nextSchedules[sIdx].categories[cIdx].items.splice(iIdx, 1);
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, schedules: nextSchedules }
+      upcomingHomework: { ...currentUpcoming, schedules: nextSchedules }
     });
   };
 
   const addMaterial = (text: string) => {
-    const nextMaterials = [...(student.upcomingAssignments?.materials || []), text];
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextMaterials = [...(currentUpcoming.materials || []), text];
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, materials: nextMaterials }
+      upcomingHomework: { ...currentUpcoming, materials: nextMaterials }
     });
   };
 
   const deleteMaterial = (index: number) => {
-    const nextMaterials = [...(student.upcomingAssignments?.materials || [])];
+    const currentUpcoming = student.upcomingHomework || { schedules: [], materials: [] };
+    const nextMaterials = [...(currentUpcoming.materials || [])];
     nextMaterials.splice(index, 1);
     onUpdateStudent({
       ...student,
-      upcomingAssignments: { ...student.upcomingAssignments, materials: nextMaterials }
+      upcomingHomework: { ...currentUpcoming, materials: nextMaterials }
     });
   };
 
@@ -763,7 +778,6 @@ const handleCopyReport = async () => {
     const futureLessons = student.homework
       .filter(day => day.hasLesson)
       .map(day => {
-        // Parse "YYYY-MM-DD"
         const [y, m, d] = day.date.split('-').map(Number);
         return new Date(y, m - 1, d);
       })
@@ -789,8 +803,6 @@ const handleCopyReport = async () => {
     const startDateStr = profile.startDate;
     const completedPaid = new Set(profile.completedPaymentDates || []);
 
-    // Walk from startDate far enough to find unpaid payment dates
-    // Use today + 2 years as a safe upper bound
     const today = new Date();
     const limitDate = new Date(today.getFullYear() + 2, today.getMonth(), today.getDate());
     const limitStr = `${limitDate.getFullYear()}-${String(limitDate.getMonth() + 1).padStart(2, '0')}-${String(limitDate.getDate()).padStart(2, '0')}`;
@@ -812,7 +824,6 @@ const handleCopyReport = async () => {
 
       if (dateStr > limitStr) break;
 
-      // Determine if this day has a lesson (matches HomeworkCalendar's lessonSessionMap logic)
       const dayData = (student.homework || []).find(d => d.date === dateStr);
       let isLesson = false;
 
@@ -828,9 +839,7 @@ const handleCopyReport = async () => {
 
       if (isLesson) {
         sessionCount++;
-        // This is a payment-due date when sessionCount is a multiple of cycle
         if (sessionCount % cycle === 0) {
-          // Return the first unpaid payment-due date
           if (!completedPaid.has(dateStr)) {
             const [y, m, d] = dateStr.split('-');
             return `${y}년 ${parseInt(m)}월 ${parseInt(d)}일`;
@@ -862,7 +871,7 @@ const handleCopyReport = async () => {
     let startTemp: Date;
     if (lastPaidDate) {
       const [py, pm, pd] = lastPaidDate.split('-').map(Number);
-      startTemp = new Date(py, pm - 1, pd + 1); // day AFTER the last payment date
+      startTemp = new Date(py, pm - 1, pd + 1);
     } else {
       const [sy, sm, sd] = startDateStr.split('-').map(Number);
       startTemp = new Date(sy, sm - 1, sd);
@@ -887,7 +896,6 @@ const handleCopyReport = async () => {
       const dd = String(tempDate.getDate()).padStart(2, '0');
       const dateStr = `${yyyy}-${mm}-${dd}`;
 
-      // Check if it's a lesson day
       const dayData = (student.homework || []).find(d => d.date === dateStr);
       let isLesson = false;
 
@@ -1033,31 +1041,39 @@ const handleCopyReport = async () => {
               </h1>
             </div>
 
-            {/* Tab switch for Journal vs Rankings (Only visible to students) */}
-            {currentUserRole === 'student' && (
-              <div className="flex bg-gray-100 p-1 rounded-xl ml-4 shadow-sm border border-gray-200/50">
-                <button
-                  onClick={() => setActiveTab('journal')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    activeTab === 'journal'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  학습 일지
-                </button>
-                <button
-                  onClick={() => setActiveTab('rankings')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    activeTab === 'rankings'
-                      ? 'bg-white text-indigo-600 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  과제 순위
-                </button>
-              </div>
-            )}
+            {/* Tab switch for Journal, Rankings, Images */}
+            <div className="flex bg-gray-100 p-1 rounded-xl ml-4 shadow-sm border border-gray-200/50">
+              <button
+                onClick={() => setActiveTab('journal')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'journal'
+                    ? 'bg-white text-gray-900 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                학습 일지
+              </button>
+              <button
+                onClick={() => setActiveTab('rankings')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'rankings'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                숙제 순위
+              </button>
+              <button
+                onClick={() => setActiveTab('images')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === 'images'
+                    ? 'bg-white text-indigo-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                인증 이미지
+              </button>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             {currentUserRole === 'student' ? (
@@ -1097,8 +1113,7 @@ const handleCopyReport = async () => {
           </div>
         )}
 
-
-        {activeTab === 'rankings' ? (
+        {activeTab === 'rankings' && (
           <StudentRankings
             students={students}
             onSelectStudent={(id) => {
@@ -1116,7 +1131,15 @@ const handleCopyReport = async () => {
             onUpdateStudent={onUpdateStudent}
             role={currentUserRole}
           />
-        ) : (
+        )}
+        {activeTab === 'images' && (
+          <HomeworkImageFeed
+            students={students || []}
+            selectedStudentId={student.id}
+            onUpdateStudent={onUpdateStudent}
+          />
+        )}
+        {activeTab === 'journal' && (
           <>
             {/* Profile Card */}
             <div className="bg-indigo-600 rounded-3xl p-6 text-white shadow-xl shadow-indigo-100 relative overflow-hidden">
@@ -1142,7 +1165,7 @@ const handleCopyReport = async () => {
                       <button 
                         onClick={handleCopyReport}
                         className="p-2 bg-white/20 hover:bg-white/30 rounded-xl transition-colors backdrop-blur-sm flex items-center gap-1"
-                        title="수업/과제 양식 복사"
+                        title="수업/숙제 양식 복사"
                       >
                         <Copy size={20} />
                       </button>
@@ -1557,15 +1580,15 @@ const handleCopyReport = async () => {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
               {/* Left Column (8/12) */}
               <div className="lg:col-span-8 space-y-6">
-                <UpcomingAssignments 
-                  data={student.upcomingAssignments || { schedules: [], materials: [] }}
+                <UpcomingHomework 
+                  data={student.upcomingHomework || { schedules: [], materials: [] }}
                   isAdmin={isAdmin}
-                  onAddSchedule={addAssignmentSchedule}
-                  onDeleteSchedule={deleteAssignmentSchedule}
-                  onUpdateDate={updateAssignmentDate}
-                  onAddItem={addAssignmentItem}
-                  onUpdateItem={updateAssignmentItem}
-                  onDeleteItem={deleteAssignmentItem}
+                  onAddSchedule={addHomeworkSchedule}
+                  onDeleteSchedule={deleteHomeworkSchedule}
+                  onUpdateDate={updateHomeworkDate}
+                  onAddItem={addHomeworkItem}
+                  onUpdateItem={updateHomeworkItem}
+                  onDeleteItem={deleteHomeworkItem}
                   onAddMaterial={addMaterial}
                   onDeleteMaterial={deleteMaterial}
                 />

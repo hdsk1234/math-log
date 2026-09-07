@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Shield, 
@@ -11,9 +11,13 @@ import {
   LogOut,
   Mail,
   Calendar,
-  ShieldAlert
+  ShieldAlert,
+  Home,
+  BarChart2
 } from 'lucide-react';
-import { subscribeToTeachers, updateTeacherPermission, deleteTeacherFromDB } from '../lib/db';
+import { subscribeToTeachers, updateTeacherPermission, deleteTeacherFromDB, subscribeToStudents } from '../lib/db';
+import { StudentData } from '../types';
+import { AdminStudentStats } from '../components/AdminStudentStats';
 
 interface TeacherData {
   email: string;
@@ -29,20 +33,35 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
+  const { tab } = useParams<{ tab?: string }>();
+  const activeTab = tab === 'stats' ? 'stats' : 'home';
+
   const [teachers, setTeachers] = useState<TeacherData[]>([]);
+  const [students, setStudents] = useState<StudentData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [isStudentsLoading, setIsStudentsLoading] = useState(true);
   const navigate = useNavigate();
 
   const ADMIN_EMAIL = 'hdsk1234@naver.com';
 
   useEffect(() => {
     setIsLoading(true);
-    const unsubscribe = subscribeToTeachers((data) => {
+    const unsubscribeTeachers = subscribeToTeachers((data) => {
       setTeachers(data);
       setIsLoading(false);
     });
-    return () => unsubscribe();
+
+    setIsStudentsLoading(true);
+    const unsubscribeStudents = subscribeToStudents((data) => {
+      setStudents(data);
+      setIsStudentsLoading(false);
+    });
+
+    return () => {
+      unsubscribeTeachers();
+      unsubscribeStudents();
+    };
   }, []);
 
   const handleTogglePermission = async (email: string, currentCanEdit: boolean) => {
@@ -87,8 +106,8 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
   return (
     <div className="min-h-screen bg-gray-50 pb-10">
       {/* Header */}
-      <header className="bg-white px-6 py-4 border-b border-gray-100 sticky top-0 z-50 shadow-sm">
-        <div className="flex justify-between items-center max-w-5xl mx-auto">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-50 shadow-sm">
+        <div className="px-6 py-4 max-w-5xl mx-auto flex justify-between items-center">
           <div className="flex items-center gap-3">
             <button
               onClick={() => navigate('/teacher')}
@@ -123,11 +142,41 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             </button>
           </div>
         </div>
+
+        {/* Tab Navigation */}
+        <div className="max-w-5xl mx-auto px-6 flex gap-2 border-t border-gray-100 pt-2">
+          <Link
+            to="/admin/home"
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-extrabold border-b-2 transition-all ${
+              activeTab === 'home'
+                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
+                : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg'
+            }`}
+          >
+            <Home size={18} />
+            홈 (교사 계정 관리)
+          </Link>
+          <Link
+            to="/admin/stats"
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-extrabold border-b-2 transition-all ${
+              activeTab === 'stats'
+                ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
+                : 'border-transparent text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-t-lg'
+            }`}
+          >
+            <BarChart2 size={18} />
+            수강생 통계
+          </Link>
+        </div>
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {activeTab === 'stats' ? (
+          <AdminStudentStats students={students} isLoading={isStudentsLoading} />
+        ) : (
+          <>
+            {/* Statistics Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center gap-4">
             <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-xl">
               <Users size={24} />
@@ -286,6 +335,8 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
             </div>
           )}
         </div>
+      </>
+    )}
       </main>
     </div>
   );

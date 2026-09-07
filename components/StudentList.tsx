@@ -22,10 +22,19 @@ interface Props {
   ) => void;
   onUpdateStudent: (student: StudentData) => void;
   onDeleteStudent: (id: string) => void;
+  onToggleFavorite?: (id: string) => void;
   canEdit?: boolean;
 }
 
-export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddStudent, onUpdateStudent, onDeleteStudent, canEdit = false }) => {
+export const StudentList: React.FC<Props> = ({ 
+  students, 
+  onSelectStudent, 
+  onAddStudent, 
+  onUpdateStudent, 
+  onDeleteStudent, 
+  onToggleFavorite,
+  canEdit = false 
+}) => {
   const [isAdding, setIsAdding] = useState(false);
   const [newName, setNewName] = useState('');
   const [newGrade, setNewGrade] = useState('');
@@ -558,13 +567,17 @@ export const StudentList: React.FC<Props> = ({ students, onSelectStudent, onAddS
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            onUpdateStudent({
-                              ...student,
-                              profile: {
-                                ...student.profile,
-                                isFavorite: !student.profile.isFavorite,
-                              },
-                            });
+                            if (onToggleFavorite) {
+                              onToggleFavorite(student.id);
+                            } else {
+                              onUpdateStudent({
+                                ...student,
+                                profile: {
+                                  ...student.profile,
+                                  isFavorite: !student.profile.isFavorite,
+                                },
+                              });
+                            }
                           }}
                           className="p-1 hover:bg-gray-100 rounded-full transition-colors relative z-20"
                           title="즐겨찾기"
