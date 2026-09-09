@@ -6,7 +6,7 @@ import {
   WeakPoint, 
   LessonLog, 
   Textbook,
-  UpcomingAssignmentsData,
+  UpcomingHomeworkData,
   StudentData,
   HomeworkType
 } from './types';
@@ -90,7 +90,7 @@ export const createNewStudent = (name: string, grade: string, school: string, pi
     lessonLogs: [],
     textbooks: [],
     teacherNote: '',
-    upcomingAssignments: {
+    upcomingHomework: {
       schedules: [],
       materials: []
     }
@@ -232,9 +232,9 @@ export const generateDemoData = (): StudentData[] => {
     },
   ];
 
-  student.teacherNote = `주원이가 최근 기상 과제 성공률이 높아지고 있습니다. 다만, 해설 작성 과제는 조금 더 꼼꼼히 진행할 필요가 있습니다.`;
+  student.teacherNote = `주원이가 최근 기상 숙제 성공률이 높아지고 있습니다. 다만, 해설 작성 숙제는 조금 더 꼼꼼히 진행할 필요가 있습니다.`;
   
-  student.upcomingAssignments = {
+  student.upcomingHomework = {
     schedules: [
       {
         date: '2/15',
@@ -251,3 +251,55 @@ export const generateDemoData = (): StudentData[] => {
 };
 
 export const INITIAL_STUDENTS: StudentData[] = generateDemoData();
+
+export const calculateStreak = (student: StudentData, targetDate: Date = new Date()): number => {
+  const homework = student.homework || [];
+  let streak = 0;
+
+  const formatDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const isDayCompleted = (dateStr: string) => {
+    if (student.profile.startDate && dateStr < student.profile.startDate) {
+      return false;
+    }
+    const daily = homework.find(h => h.date === dateStr);
+    if (!daily || !daily.tasks) return false;
+
+    const wakeUp = daily.tasks.find(t => t.type === 'wake_up')?.completed;
+    const problem30 = daily.tasks.find(t => t.type === 'problem_30')?.completed;
+    const explanation = daily.tasks.find(t => t.type === 'explanation')?.completed;
+
+    return !!(wakeUp && problem30 && explanation);
+  };
+
+  const targetStr = formatDate(targetDate);
+  const realTodayStr = formatDate(new Date());
+
+  let checkDate = new Date(targetDate);
+
+  // 기준일(targetDate)이 실시간 '오늘'인 경우에만 당일 미완료 시 어제 날짜부터 스트릭 유예를 적용.
+  // 기준일이 어제(8/7) 등 과거/생성 기준일인 경우 기준일 과제가 완료되어야만 스트릭으로 인정.
+  const isTargetToday = targetStr === realTodayStr;
+  const targetCompleted = isDayCompleted(targetStr);
+
+  if (isTargetToday && !targetCompleted) {
+    checkDate.setDate(checkDate.getDate() - 1);
+  }
+
+  while (true) {
+    const dateStr = formatDate(checkDate);
+    if (isDayCompleted(dateStr)) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      break;
+    }
+  }
+
+  return streak;
+};

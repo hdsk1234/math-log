@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useParams, useLocation } from 'react-router-dom';
 import Callback from './pages/Callback';
 import { createNewStudent } from './constants';
 import { Login } from './components/Login';
 import { StudentManagementDashboard } from './pages/StudentManagementDashboard';
-import { StudentJournalDashboard } from './pages/StudentJournalDashboard';
+import { StudentDetailDashboard } from './pages/StudentDetailDashboard';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { RankingsPage } from './pages/RankingsPage';
 import { MyPage } from './pages/MyPage';
@@ -18,7 +18,8 @@ import {
   deleteStudentFromDB, 
   isTeacherApproved,
   checkTeacherEditPermission,
-  getTeacherData
+  getTeacherData,
+  updateTeacherFavorites
 } from './lib/db';
 import { subscribeToAuthChanges, logOut } from './lib/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -30,6 +31,10 @@ function AppContent() {
     return (savedRole as UserRole) || 'guest';
   });
   const [students, setStudents] = useState<StudentData[]>([]);
+  const [favoriteStudents, setFavoriteStudents] = useState<string[]>(() => {
+    const saved = localStorage.getItem('favorites_guest');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [activeStudentId, setActiveStudentId] = useState<string | null>(() => {
     return sessionStorage.getItem('active_student_id');
   });
@@ -75,7 +80,12 @@ function AppContent() {
             
             const hasEditPermission = teacherData.canEdit === true || user.email!.toLowerCase() === 'hdsk1234@naver.com';
             setCanEdit(hasEditPermission);
-            sessionStorage.setItem('can_edit', hasEditPermission ? 'true' : 'false');
+            sessionStorage.setItem('can_edit', String(hasEditPermission));
+            // [유저별 즐겨찾기 추가]
+            const favs = teacherData.favoriteStudents || [];
+            setFavoriteStudents(favs);
+            localStorage.setItem(`favorites_${user.email}`, JSON.stringify(favs));
+
             setIsLoading(false);
           } else {
             // Google authenticated, but pending registration in Firestore
@@ -99,6 +109,11 @@ function AppContent() {
         setUserEmail(null);
         setTeacherName(null);
         setGoogleDisplayName(null);
+
+        // [유저별 즐겨찾기 복구]
+        const saved = localStorage.getItem('favorites_guest');
+        setFavoriteStudents(saved ? JSON.parse(saved) : []);
+
         setIsLoading(false);
       }
     });
@@ -117,7 +132,11 @@ function AppContent() {
     if (role === 'teacher' || role === 'student' || location.pathname === '/rankings') {
       try {
         unsubscribeDB = subscribeToStudents((data) => {
-          setStudents(data);
+          const sanitizedData = data.map(s => ({
+            ...s,
+            upcomingHomework: s.upcomingHomework || { schedules: [], materials: [] }
+          }));
+          setStudents(sanitizedData);
           setIsLoading(false);
         });
       } catch (e) {
@@ -172,6 +191,11 @@ function AppContent() {
     setTeacherName(null);
     setActiveStudentId(null);
     setStudents([]);
+
+    // [유저별 즐겨찾기 복구]
+    const saved = localStorage.getItem('favorites_guest');
+    setFavoriteStudents(saved ? JSON.parse(saved) : []);
+
     navigate('/login');
   };
 
@@ -224,6 +248,32 @@ function AppContent() {
     updateStudentInDB(studentWithTimestamp);
   };
 
+  const handleToggleFavorite = async (studentId: string) => {
+    const isFav = favoriteStudents.includes(studentId);
+    const nextFavs = isFav 
+      ? favoriteStudents.filter(id => id !== studentId) 
+      : [...favoriteStudents, studentId];
+    
+    setFavoriteStudents(nextFavs);
+
+    if (userEmail) {
+      await updateTeacherFavorites(userEmail, nextFavs);
+      localStorage.setItem(`favorites_${userEmail}`, JSON.stringify(nextFavs));
+    } else {
+      localStorage.setItem('favorites_guest', JSON.stringify(nextFavs));
+    }
+  };
+
+  const processedStudents = useMemo(() => {
+    return students.map(student => ({
+      ...student,
+      profile: {
+        ...student.profile,
+        isFavorite: favoriteStudents.includes(student.id)
+      }
+    }));
+  }, [students, favoriteStudents]);
+
   if (isLoading && role !== 'guest') {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -269,24 +319,30 @@ function AppContent() {
             <Navigate to="/login" replace />
           ) : (
             <StudentManagementDashboard 
-              students={students}
+              students={processedStudents}
               onSelectStudent={(id) => navigate(`/student/${id}`)}
               onAddStudent={handleAddStudent}
               onUpdateStudent={handleUpdateStudent}
               onDeleteStudent={handleDeleteStudent}
+              onToggleFavorite={handleToggleFavorite}
               onLogout={handleLogout}
               canEdit={canEdit}
-              userEmail={teacherName || userEmail}
+              userEmail={userEmail}
+              teacherName={teacherName}
             />
           )
         } 
       />
       <Route 
         path="/admin" 
+        element={<Navigate to="/admin/home" replace />} 
+      />
+      <Route 
+        path="/admin/:tab" 
         element={
           role === 'teacher' && userEmail?.toLowerCase() === 'hdsk1234@naver.com' ? (
             <AdminDashboard 
-              userEmail={teacherName || userEmail}
+              userEmail={userEmail}
               onLogout={handleLogout}
             />
           ) : (
@@ -300,7 +356,7 @@ function AppContent() {
           <StudentWrapper 
             role={role}
             activeStudentId={activeStudentId}
-            students={students}
+            students={processedStudents}
             onUpdateStudent={handleUpdateStudent}
             onDeleteStudent={handleDeleteStudent}
             onLogout={handleLogout}
@@ -314,7 +370,7 @@ function AppContent() {
         element={
           <RankingsPage 
             role={role}
-            students={students}
+            students={processedStudents}
             activeStudentId={activeStudentId}
           />
         } 
@@ -328,7 +384,7 @@ function AppContent() {
             <MyPage 
               role={role}
               activeStudentId={activeStudentId}
-              students={students}
+              students={processedStudents}
               userEmail={userEmail}
               teacherName={teacherName}
               onUpdateStudent={handleUpdateStudent}
@@ -386,7 +442,7 @@ const StudentWrapper: React.FC<StudentWrapperProps> = ({
   }
 
   return (
-    <StudentJournalDashboard
+    <StudentDetailDashboard
       student={currentStudent}
       students={students}
       currentUserRole={role}

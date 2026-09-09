@@ -1,5 +1,14 @@
 {
   "projects": {
     "default": "math-log-a777e"
+  },
+  "targets": {
+    "math-log-a777e": {
+      "hosting": {
+        "orcamathlab": [
+          "orcamathlab"
+        ]
+      }
+    }
   }
 }

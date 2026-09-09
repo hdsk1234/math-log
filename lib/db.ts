@@ -200,3 +200,14 @@ export const deleteTeacherFromDB = async (email: string) => {
   }
 };
 
+// [선생님용] 즐겨찾기 학생 목록 업데이트
+export const updateTeacherFavorites = async (email: string, favoriteStudents: string[]) => {
+  if (!email) return;
+  try {
+    const docRef = doc(db, TEACHERS_COLLECTION, email);
+    await setDoc(docRef, { favoriteStudents }, { merge: true });
+  } catch (e) {
+    console.error("Error updating teacher favorites:", e);
+  }
+};
+

@@ -1,0 +1,24 @@
+- [x] `DashboardImageRender.tsx`의 `StudentStats` 인터페이스에 `totalExplanationCount` 필드 추가
+- [x] `DashboardExportModal.tsx`에서 학생별 해설 개수 누적 집계 및 정렬 조건(제출률 -> 총 해설 개수 -> 이름) 적용
+- [x] `StudentRankings.tsx`에서 학생별 해설 개수 누적 집계 및 정렬 조건 적용
+- [x] 빌드 및 동작 검증
+- [x] 학생 추가 및 수정 시 PIN 8자리 유효성 검사 추가 (StudentList.tsx)
+- [x] `ParentReportRender.tsx` 컴포넌체 생성 (학부모 리포트 이미지 렌더링용)
+- [x] `ParentReportModal.tsx` 컴포넌트 생성 (피드백 편집 및 PNG 이미지 복사/다운로드 기능)
+- [x] `StudentJournalDashboard.tsx` 파일 수정 (헤더에 리포트 발행 버튼 및 모달 연동)
+- [x] 빌드 검증 (로컬 환경 확인 및 완료)
+- [x] `QuickUpdateDashboard.tsx` 에 `undoBackup`, `showUndoToast` 등 백업용 State 추가
+- [x] `handleResetDailyData` 함수 수정 (삭제 전 백업 및 Toast 제어)
+- [x] `triggerUndo` 되돌리기 액션 함수 구현 (모든 학생 복구 및 수동 리스트 복원)
+- [x] 지속형 실행 취소 토스트 마크업 추가 (닫기/되돌리기 연동)
+- [x] 빌드 및 동작 검증
+- [x] `firebase.json` 수정 (functions 구성 추가)
+- [x] `functions/package.json` 생성 (functions 모듈 설정)
+- [x] `functions/index.js` 생성 (telegramWebhook 봇 연동 구현)
+- [x] `functions/package.json` 수정 (Gemini AI SDK 패키지 추가)
+- [x] `functions/index.js` 수정 (주제 스레드 ID 인식, 일반 대화 필터, Gemini API 및 00:01 크론잡 집계 구현)
+- [x] `components/HomeworkImageFeed.tsx` 신규 개발 (개별 학생 필터링 기능 탑재)
+- [x] `pages/StudentManagementDashboard.tsx` 수정 (관리자 버튼 제거, 숙제 이미지 탭 추가)
+- [x] `pages/StudentDetailDashboard.tsx` 생성 (기존 StudentJournalDashboard 숙제 용어 일관화 이관)
+- [x] `components/UpcomingHomework.tsx` 생성 (기존 UpcomingAssignments 숙제 용어 일관화 이관)
+- [x] `App.tsx` 수정 (불필요한 /tg-test 라우트 제거, 리팩토링 컴포넌트 라우트 교체)

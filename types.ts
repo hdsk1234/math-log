@@ -79,22 +79,22 @@ export interface StudentProfile {
   completedPaymentDates?: string[]; // 수납 완료 처리된 날짜들의 배열 (YYYY-MM-DD)
 }
 
-export interface AssignmentItem {
+export interface HomeworkItem {
   text: string;
   completed: boolean;
 }
 
-export interface AssignmentCategory {
+export interface HomeworkCategory {
   title: string; // '[문제풀이]', '[해설작성]'
-  items: AssignmentItem[];
+  items: HomeworkItem[];
 }
 
 export interface DailySchedule {
   date: string; // '2/13'
-  categories: AssignmentCategory[];
+  categories: HomeworkCategory[];
 }
 
-export interface UpcomingAssignmentsData {
+export interface UpcomingHomeworkData {
   schedules: DailySchedule[];
   materials: string[];
 }
@@ -108,7 +108,7 @@ export interface StudentData {
   lessonLogs: LessonLog[];
   textbooks: Textbook[]; // Changed from roadmap to textbooks
   teacherNote: string;
-  upcomingAssignments: UpcomingAssignmentsData;
+  upcomingHomework: UpcomingHomeworkData;
 }
 
 export interface TrendData {
