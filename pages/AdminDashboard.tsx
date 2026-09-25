@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, 
   Shield, 
@@ -13,7 +13,8 @@ import {
   Calendar,
   ShieldAlert,
   Home,
-  BarChart2
+  BarChart2,
+  Activity
 } from 'lucide-react';
 import { subscribeToTeachers, updateTeacherPermission, deleteTeacherFromDB, subscribeToStudents } from '../lib/db';
 import { StudentData } from '../types';
@@ -25,6 +26,8 @@ interface TeacherData {
   createdAt?: string;
   role?: string;
   canEdit?: boolean;
+  isOnline?: boolean;
+  lastActiveAt?: string;
 }
 
 interface Props {
@@ -65,7 +68,7 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
   }, []);
 
   const handleTogglePermission = async (email: string, currentCanEdit: boolean) => {
-    if (email.toLowerCase() === ADMIN_EMAIL) {
+    if (!email || email.toLowerCase() === ADMIN_EMAIL) {
       alert("관리자 본인의 권한은 변경할 수 없습니다.");
       return;
     }
@@ -74,7 +77,7 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
   };
 
   const handleDeleteTeacher = async (email: string) => {
-    if (email.toLowerCase() === ADMIN_EMAIL) {
+    if (!email || email.toLowerCase() === ADMIN_EMAIL) {
       alert("관리자 본인의 계정은 삭제할 수 없습니다.");
       return;
     }
@@ -83,15 +86,25 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
     }
   };
 
-  const filteredTeachers = teachers.filter((teacher) =>
-    teacher.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    teacher.name?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const isRecentlyActive = (lastActiveAt?: string, isOnline?: boolean) => {
+    if (!isOnline || !lastActiveAt) return false;
+    const activeTime = new Date(lastActiveAt).getTime();
+    if (isNaN(activeTime)) return false;
+    return Date.now() - activeTime <= 3 * 60 * 1000;
+  };
+
+  const filteredTeachers = teachers.filter((teacher) => {
+    const email = teacher.email || '';
+    const name = teacher.name || '';
+    const query = searchQuery.toLowerCase();
+    return email.toLowerCase().includes(query) || name.toLowerCase().includes(query);
+  });
 
   // Statistics calculation
   const totalTeachers = teachers.length;
-  const approvedEditors = teachers.filter((t) => t.canEdit || t.email.toLowerCase() === ADMIN_EMAIL).length;
-  const pendingTeachers = teachers.filter((t) => !t.canEdit && t.email.toLowerCase() !== ADMIN_EMAIL).length;
+  const onlineTeachers = teachers.filter((t) => isRecentlyActive(t.lastActiveAt, t.isOnline)).length;
+  const approvedEditors = teachers.filter((t) => t.canEdit || (t.email && t.email.toLowerCase() === ADMIN_EMAIL)).length;
+  const pendingTeachers = teachers.filter((t) => !t.canEdit && (!t.email || t.email.toLowerCase() !== ADMIN_EMAIL)).length;
 
   const formatDate = (isoString?: string) => {
     if (!isoString) return '-';
@@ -128,7 +141,7 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
           <div className="flex items-center gap-3">
             {userEmail && (
               <div className="flex items-center gap-1.5 bg-indigo-50 border border-indigo-100 px-2.5 py-1.5 rounded-md text-indigo-700 font-semibold text-xs transition-all">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
                 <span className="hidden sm:inline">{userEmail} (교사)</span>
                 <span className="sm:hidden">{userEmail.split('@')[0]} (교사)</span>
               </div>
@@ -176,167 +189,196 @@ export const AdminDashboard: React.FC<Props> = ({ userEmail, onLogout }) => {
         ) : (
           <>
             {/* Statistics Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="p-3.5 bg-indigo-50 text-indigo-600 rounded-xl">
-              <Users size={24} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">전체 가입 선생님</p>
-              <h2 className="text-2xl font-extrabold text-gray-900 mt-0.5">{isLoading ? '-' : `${totalTeachers}명`}</h2>
-            </div>
-          </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="bg-white rounded-2xl p-5 border border-emerald-100 shadow-sm flex items-center gap-4 relative overflow-hidden">
+                <div className="p-3 bg-emerald-50 text-emerald-600 rounded-xl">
+                  <Activity size={22} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <p className="text-xs font-extrabold text-emerald-700 uppercase tracking-wider">실시간 접속자</p>
+                  </div>
+                  <h2 className="text-2xl font-black text-gray-900 mt-0.5">{isLoading ? '-' : `${onlineTeachers}명`}</h2>
+                </div>
+              </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="p-3.5 bg-emerald-50 text-emerald-600 rounded-xl">
-              <UserCheck size={24} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">편집 승인 계정</p>
-              <h2 className="text-2xl font-extrabold text-gray-900 mt-0.5">{isLoading ? '-' : `${approvedEditors}명`}</h2>
-            </div>
-          </div>
+              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
+                  <Users size={22} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">전체 가입 선생님</p>
+                  <h2 className="text-2xl font-extrabold text-gray-900 mt-0.5">{isLoading ? '-' : `${totalTeachers}명`}</h2>
+                </div>
+              </div>
 
-          <div className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="p-3.5 bg-amber-50 text-amber-600 rounded-xl">
-              <UserX size={24} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">조회 전용(대기)</p>
-              <h2 className="text-2xl font-extrabold text-gray-900 mt-0.5">{isLoading ? '-' : `${pendingTeachers}명`}</h2>
-            </div>
-          </div>
-        </div>
+              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
+                  <UserCheck size={22} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">편집 승인 계정</p>
+                  <h2 className="text-2xl font-extrabold text-gray-900 mt-0.5">{isLoading ? '-' : `${approvedEditors}명`}</h2>
+                </div>
+              </div>
 
-        {/* Teachers List Card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
-            <div>
-              <h3 className="text-lg font-extrabold text-gray-900">교사 계정 권한 관리</h3>
-              <p className="text-gray-400 text-sm mt-0.5">승인된 계정만 대시보드의 학생 데이터 수정 및 추가가 가능합니다.</p>
+              <div className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm flex items-center gap-4">
+                <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
+                  <UserX size={22} />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">조회 전용(대기)</p>
+                  <h2 className="text-2xl font-extrabold text-gray-900 mt-0.5">{isLoading ? '-' : `${pendingTeachers}명`}</h2>
+                </div>
+              </div>
             </div>
-            {/* Search Input */}
-            <div className="relative max-w-xs w-full">
-              <Search className="absolute left-3 top-3 text-gray-400" size={18} />
-              <input
-                type="text"
-                placeholder="이메일 검색..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-              />
-            </div>
-          </div>
 
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20 text-gray-400">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
-              <span>선생님 목록을 실시간으로 가져오는 중...</span>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100">
-                    <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">선생님 정보</th>
-                    <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">가입 일시</th>
-                    <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">역할</th>
-                    <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">편집 권한</th>
-                    <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider text-right">관리</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {filteredTeachers.map((teacher) => {
-                    const isSelfAdmin = teacher.email.toLowerCase() === ADMIN_EMAIL;
-                    const canEdit = teacher.canEdit || isSelfAdmin;
+            {/* Teachers List Card */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white">
+                <div>
+                  <h3 className="text-lg font-extrabold text-gray-900">교사 계정 권한 및 실시간 세션 관리</h3>
+                  <p className="text-gray-400 text-sm mt-0.5">실시간 접속 여부 및 편집 권한을 확인하고 수정할 수 있습니다.</p>
+                </div>
+                {/* Search Input */}
+                <div className="relative max-w-xs w-full">
+                  <Search className="absolute left-3 top-3 text-gray-400" size={18} />
+                  <input
+                    type="text"
+                    placeholder="이메일/이름 검색..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 text-sm rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                  />
+                </div>
+              </div>
 
-                    return (
-                      <tr 
-                        key={teacher.email} 
-                        className={`hover:bg-gray-50/50 transition-colors ${isSelfAdmin ? 'bg-indigo-50/10' : ''}`}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold ${isSelfAdmin ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
-                              {(teacher.name || teacher.email).charAt(0).toUpperCase()}
-                            </div>
-                            <div className="flex flex-col">
-                              <span className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                                {teacher.name || teacher.email.split('@')[0]}
-                                {isSelfAdmin && (
-                                  <span title="최고 관리자 계정">
-                                    <ShieldAlert size={14} className="text-indigo-600 inline" />
-                                  </span>
-                                )}
-                              </span>
-                              <span className="text-xs text-gray-400">{teacher.email}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          <span className="flex items-center gap-1.5">
-                            <Calendar size={14} className="text-gray-400" />
-                            {formatDate(teacher.createdAt)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {isSelfAdmin ? (
-                            <span className="px-2 py-1 text-xs font-bold bg-indigo-100 text-indigo-800 rounded-md border border-indigo-200">
-                              최고 관리자
-                            </span>
-                          ) : (
-                            <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-md">
-                              선생님
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <button
-                            onClick={() => handleTogglePermission(teacher.email, !!teacher.canEdit)}
-                            disabled={isSelfAdmin}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all ${
-                              canEdit
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 disabled:hover:bg-emerald-50'
-                                : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
-                            }`}
-                          >
-                            <span className={`w-1.5 h-1.5 rounded-full ${canEdit ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
-                            {canEdit ? '편집 및 수정 가능' : '조회 전용 대기'}
-                          </button>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <button
-                            onClick={() => handleDeleteTeacher(teacher.email)}
-                            disabled={isSelfAdmin}
-                            className={`p-2 rounded-full transition-all text-gray-300 ${
-                              isSelfAdmin 
-                                ? 'cursor-not-allowed opacity-30' 
-                                : 'hover:text-red-500 hover:bg-red-50'
-                            }`}
-                            title={isSelfAdmin ? "관리자 계정은 삭제할 수 없습니다" : "선생님 계정 제거"}
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </td>
+              {isLoading ? (
+                <div className="flex flex-col items-center justify-center py-20 text-gray-400">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600 mb-4"></div>
+                  <span>선생님 목록을 실시간으로 가져오는 중...</span>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100">
+                        <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">선생님 정보</th>
+                        <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">실시간 접속 상태</th>
+                        <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">가입 일시</th>
+                        <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">역할</th>
+                        <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider">편집 권한</th>
+                        <th className="px-6 py-4 text-xs font-extrabold text-gray-400 uppercase tracking-wider text-right">관리</th>
                       </tr>
-                    );
-                  })}
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredTeachers.map((teacher, idx) => {
+                        const emailStr = teacher.email || '';
+                        const isSelfAdmin = !!emailStr && emailStr.toLowerCase() === ADMIN_EMAIL;
+                        const canEdit = teacher.canEdit || isSelfAdmin;
+                        const online = isRecentlyActive(teacher.lastActiveAt, teacher.isOnline);
 
-                  {filteredTeachers.length === 0 && (
-                    <tr>
-                      <td colSpan={5} className="text-center py-12 text-gray-400 text-sm">
-                        <Mail className="mx-auto mb-2 text-gray-300" size={24} />
-                        검색 조건에 맞는 선생님 계정이 존재하지 않습니다.
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+                        return (
+                          <tr 
+                            key={emailStr || idx} 
+                            className={`hover:bg-gray-50/50 transition-colors ${isSelfAdmin ? 'bg-indigo-50/10' : ''}`}
+                          >
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <div className="flex items-center gap-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-extrabold ${isSelfAdmin ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-600'}`}>
+                                  {(teacher.name || emailStr || '?').charAt(0).toUpperCase()}
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
+                                    {teacher.name || (emailStr ? emailStr.split('@')[0] : '이름 없음')}
+                                    {isSelfAdmin && (
+                                      <span title="최고 관리자 계정">
+                                        <ShieldAlert size={14} className="text-indigo-600 inline" />
+                                      </span>
+                                    )}
+                                  </span>
+                                  <span className="text-xs text-gray-400">{emailStr || '이메일 없음'}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {online ? (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-extrabold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  온라인 (접속 중)
+                                </div>
+                              ) : (
+                                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-500">
+                                  <span className="w-2 h-2 rounded-full bg-gray-300"></span>
+                                  오프라인 {teacher.lastActiveAt ? `(${formatDate(teacher.lastActiveAt)})` : ''}
+                                </div>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <span className="flex items-center gap-1.5">
+                                <Calendar size={14} className="text-gray-400" />
+                                {formatDate(teacher.createdAt)}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              {isSelfAdmin ? (
+                                <span className="px-2 py-1 text-xs font-bold bg-indigo-100 text-indigo-800 rounded-md border border-indigo-200">
+                                  최고 관리자
+                                </span>
+                              ) : (
+                                <span className="px-2 py-1 text-xs font-semibold bg-gray-100 text-gray-600 rounded-md">
+                                  선생님
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap">
+                              <button
+                                onClick={() => handleTogglePermission(teacher.email, !!teacher.canEdit)}
+                                disabled={isSelfAdmin}
+                                className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition-all ${
+                                  canEdit
+                                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 disabled:hover:bg-emerald-50'
+                                    : 'bg-gray-50 text-gray-500 border-gray-200 hover:bg-gray-100'
+                                }`}
+                              >
+                                <span className={`w-1.5 h-1.5 rounded-full ${canEdit ? 'bg-emerald-500' : 'bg-gray-400'}`}></span>
+                                {canEdit ? '편집 및 수정 가능' : '조회 전용 대기'}
+                              </button>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-right">
+                              <button
+                                onClick={() => handleDeleteTeacher(teacher.email)}
+                                disabled={isSelfAdmin}
+                                className={`p-2 rounded-full transition-all text-gray-300 ${
+                                  isSelfAdmin 
+                                    ? 'cursor-not-allowed opacity-30' 
+                                    : 'hover:text-red-500 hover:bg-red-50'
+                                }`}
+                                title={isSelfAdmin ? "관리자 계정은 삭제할 수 없습니다" : "선생님 계정 제거"}
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {filteredTeachers.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">
+                            <Mail className="mx-auto mb-2 text-gray-300" size={24} />
+                            검색 조건에 맞는 선생님 계정이 존재하지 않습니다.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </>
-    )}
+          </>
+        )}
       </main>
     </div>
   );

@@ -4,7 +4,7 @@ import { StudentData, HomeworkType } from '../types';
 import { StudentList } from '../components/StudentList';
 import { QuickUpdateDashboard } from '../components/QuickUpdateDashboard';
 import { StudentRankings } from '../components/StudentRankings';
-import { GraduationCap, LogOut, List, Zap, Copy, Trophy, Shield, Bot, Image as ImageIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { GraduationCap, LogOut, List, Zap, Copy, Trophy, Shield, Bot, Image as ImageIcon, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
 import { DashboardExportModal } from '../components/DashboardExportModal';
 import { TelegramLogTab } from '../components/TelegramLogTab';
 import { HomeworkImageFeed } from '../components/HomeworkImageFeed';
@@ -205,7 +205,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
                   : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
-                <Trophy size={14} /> 과제 순위
+                <BarChart3 size={14} /> 통계
               </button>
               <button
                 onClick={() => setViewMode('logs')}
@@ -282,8 +282,8 @@ export const StudentManagementDashboard: React.FC<Props> = ({
             viewMode === 'rankings' ? 'text-indigo-600' : 'text-gray-400'
           }`}
         >
-          <Trophy size={20} />
-          <span>과제 순위</span>
+          <BarChart3 size={20} />
+          <span>통계</span>
         </button>
         <button
           onClick={() => setViewMode('logs')}

@@ -9,7 +9,8 @@ import {
   query,
   where,
   getDocs,
-  limit
+  limit,
+  getCountFromServer
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { StudentData } from "../types";
@@ -210,4 +211,32 @@ export const updateTeacherFavorites = async (email: string, favoriteStudents: st
     console.error("Error updating teacher favorites:", e);
   }
 };
+
+// [선생님용] 실시간 세션/접속 상태 갱신
+export const updateTeacherPresence = async (email: string, isOnline: boolean) => {
+  if (!email) return;
+  try {
+    const docRef = doc(db, TEACHERS_COLLECTION, email);
+    await setDoc(docRef, {
+      isOnline,
+      lastActiveAt: new Date().toISOString()
+    }, { merge: true });
+  } catch (e) {
+    console.error("Error updating teacher presence:", e);
+  }
+};
+
+// [공통/관리자용] 컬렉션 문서 총 개수 효율적 집계 (getCountFromServer)
+export const getCollectionCount = async (collectionName: string): Promise<number> => {
+  try {
+    const collRef = collection(db, collectionName);
+    const snapshot = await getCountFromServer(collRef);
+    return snapshot.data().count;
+  } catch (e) {
+    console.error(`Error getting total count for ${collectionName}:`, e);
+    return 0;
+  }
+};
+
+
 

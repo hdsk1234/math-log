@@ -19,7 +19,8 @@ import {
   isTeacherApproved,
   checkTeacherEditPermission,
   getTeacherData,
-  updateTeacherFavorites
+  updateTeacherFavorites,
+  updateTeacherPresence
 } from './lib/db';
 import { subscribeToAuthChanges, logOut } from './lib/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -124,6 +125,42 @@ function AppContent() {
     };
   }, []);
 
+  // 1.5 Realtime Presence Tracking for Teachers
+  useEffect(() => {
+    if (role !== 'teacher' || !userEmail) return;
+
+    // Immediately mark online
+    updateTeacherPresence(userEmail, true);
+
+    // Heartbeat interval every 45 seconds
+    const interval = setInterval(() => {
+      updateTeacherPresence(userEmail, true);
+    }, 45000);
+
+    // Tab visibility & unload handlers
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        updateTeacherPresence(userEmail, false);
+      } else {
+        updateTeacherPresence(userEmail, true);
+      }
+    };
+
+    const handleBeforeUnload = () => {
+      updateTeacherPresence(userEmail, false);
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      updateTeacherPresence(userEmail, false);
+    };
+  }, [role, userEmail]);
+
   // 2. Data Subscription
   useEffect(() => {
     let unsubscribeDB: () => void;
@@ -172,6 +209,9 @@ function AppContent() {
   const handleLogout = async () => {
     if (!window.confirm("로그아웃 하시겠습니까?")) {
       return;
+    }
+    if (userEmail) {
+      await updateTeacherPresence(userEmail, false);
     }
     sessionStorage.removeItem('user_role');
     sessionStorage.removeItem('active_student_id');

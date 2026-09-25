@@ -1061,7 +1061,7 @@ export const StudentDetailDashboard: React.FC<Props> = ({
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                숙제 순위
+                통계
               </button>
               <button
                 onClick={() => setActiveTab('images')}

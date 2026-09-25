@@ -33,7 +33,7 @@ export const RankingsPage: React.FC<Props> = ({ role, students, activeStudentId 
               <h1 className="text-xl font-extrabold text-gray-900 tracking-tight">과외 일지</h1>
             </div>
             <span className="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded-full font-extrabold">
-              전체 순위
+              전체 통계
             </span>
           </div>
 
