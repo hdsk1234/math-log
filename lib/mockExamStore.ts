@@ -14,7 +14,10 @@ export function getInitialMockExamRounds(): ExamRound[] {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        // 11회차까지 보장
+        const existingMap = new Map<number, ExamRound>();
+        parsed.forEach((r: ExamRound) => existingMap.set(r.round, r));
+        return MOCK_EXAM_ROUNDS.map(defaultR => existingMap.get(defaultR.round) || defaultR);
       }
     }
   } catch (e) {

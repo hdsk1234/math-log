@@ -135,7 +135,22 @@ export const MOCK_EXAM_ROUNDS: ExamRound[] = [
       '최○윤': 62,
       '이○린': 60,
     }
-  }
+  },
+  // 4~11회차 (예정 회차 템플릿)
+  ...Array.from({ length: 8 }, (_, i) => {
+    const roundNum = i + 4;
+    return {
+      round: roundNum,
+      title: `${roundNum}회차 실모`,
+      date: `2026-09-${String(20 + (i + 1) * 7).padStart(2, '0')}`,
+      totalCandidates: 0,
+      recordedCandidates: 0,
+      mean: 0,
+      median: 0,
+      highest: 0,
+      scores: {}
+    };
+  })
 ];
 
 // 마스킹 이름과 실제 DB 학생 일치 매칭 (이름 마스킹 패턴 기반)

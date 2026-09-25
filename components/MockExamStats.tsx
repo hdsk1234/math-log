@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { StudentData, UserRole } from '../types';
 import {
   ExamRound,
+  MOCK_EXAM_ROUNDS,
   matchStudentByMask,
   calculateStudentHwRate,
   calculatePearson,
@@ -39,8 +40,18 @@ import {
   Edit2,
   RotateCcw,
   Check,
-  X
+  X,
+  Filter
 } from 'lucide-react';
+
+export type HwMetric = 'all' | 'wake_up' | 'problem_30' | 'explanation';
+
+export const HW_METRICS: { key: HwMetric; label: string; short: string; color: string; bg: string; border: string }[] = [
+  { key: 'all', label: '전체 과제', short: '전체', color: 'text-indigo-600', bg: 'bg-indigo-50', border: 'border-indigo-200' },
+  { key: 'wake_up', label: '기상 인증', short: '기상', color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-200' },
+  { key: 'problem_30', label: '30문제 풀이', short: '30제', color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
+  { key: 'explanation', label: '오답 해설', short: '해설', color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-200' },
+];
 
 interface Props {
   students: StudentData[];
@@ -55,6 +66,12 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
   const [selectedRoundFilter, setSelectedRoundFilter] = useState<string>('all');
   const [showRealName, setShowRealName] = useState<boolean>(true); // 가운데 이름 가리지 않고 실명 기본 표시
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  // 과제 지표 선택 (전체, 기상인증, 30문제, 해설)
+  const [selectedHwMetric, setSelectedHwMetric] = useState<HwMetric>('all');
+
+  // 시계열 추이 분석 반영 회차 범위 (기본 3회차까지)
+  const [timeSeriesEndRound, setTimeSeriesEndRound] = useState<number>(3);
 
   // Raw 데이터 관리 상태
   const [rawTextModalOpen, setRawTextModalOpen] = useState<boolean>(false);
@@ -140,33 +157,74 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
     return processedData.filter(d => !d.isMatched);
   }, [processedData]);
 
-  // 2. 상관관계 지표 계산
-  const correlationStats = useMemo(() => {
-    const roundCorrs: Record<number, number> = {};
-    rounds.forEach(r => {
-      const list = matchedStudents.filter(d => typeof d.roundScores[r.round] === 'number');
-      const corr = calculatePearson(
-        list.map(d => d.hwRate!),
-        list.map(d => d.roundScores[r.round]!)
-      );
-      roundCorrs[r.round] = Math.round(corr * 1000) / 1000;
+  // 학생의 선택된 과제 항목 제출률 반환 헬퍼
+  const getStudentMetricRate = (
+    d: { hwRate: number | null; wakeUpRate: number | null; problem30Rate: number | null; explanationRate: number | null },
+    metric: HwMetric
+  ): number => {
+    switch (metric) {
+      case 'wake_up': return d.wakeUpRate ?? 0;
+      case 'problem_30': return d.problem30Rate ?? 0;
+      case 'explanation': return d.explanationRate ?? 0;
+      case 'all': default: return d.hwRate ?? 0;
+    }
+  };
+
+  // 2. 전체 과제 및 세부 과제(기상, 30문제, 해설)별 상관관계 지표 계산
+  const allMetricCorrelations = useMemo(() => {
+    const metrics: HwMetric[] = ['all', 'wake_up', 'problem_30', 'explanation'];
+    const result = {} as Record<HwMetric, { roundCorrs: Record<number, number>; avg: number }>;
+
+    metrics.forEach(m => {
+      const roundCorrs: Record<number, number> = {};
+      rounds.forEach(r => {
+        const list = matchedStudents.filter(d => typeof d.roundScores[r.round] === 'number');
+        const xArr = list.map(d => getStudentMetricRate(d, m));
+        const yArr = list.map(d => d.roundScores[r.round]!);
+        const rVal = calculatePearson(xArr, yArr);
+        roundCorrs[r.round] = Math.round(rVal * 1000) / 1000;
+      });
+
+      // 누적 평균 성적과의 상관계수
+      const avgList = matchedStudents.filter(d => d.avgScore !== null);
+      const avgX = avgList.map(d => getStudentMetricRate(d, m));
+      const avgY = avgList.map(d => d.avgScore!);
+      const avgR = calculatePearson(avgX, avgY);
+
+      result[m] = {
+        roundCorrs,
+        avg: Math.round(avgR * 1000) / 1000
+      };
     });
 
-    // 누적 평균
-    const avgList = matchedStudents.filter(d => d.avgScore !== null);
-    const avgCorr = calculatePearson(
-      avgList.map(d => d.hwRate!),
-      avgList.map(d => d.avgScore!)
-    );
-
-    return {
-      roundCorrs,
-      avg: Math.round(avgCorr * 1000) / 1000,
-      count: matchedStudents.length
-    };
+    return result;
   }, [matchedStudents, rounds]);
 
-  // 3. 산점도 차트 데이터 및 선형 회귀선
+  // 현재 선택된 과제 지표의 상관관계 통계
+  const correlationStats = useMemo(() => {
+    const curr = allMetricCorrelations[selectedHwMetric] || allMetricCorrelations.all;
+    return {
+      roundCorrs: curr.roundCorrs,
+      avg: curr.avg,
+      count: matchedStudents.length
+    };
+  }, [allMetricCorrelations, selectedHwMetric, matchedStudents]);
+
+  // 과제 영향도 1위 항목 자동 판별 (기상 vs 30제 vs 해설)
+  const topImpactingMetric = useMemo(() => {
+    const list: { key: HwMetric; label: string; r: number }[] = [
+      { key: 'wake_up', label: '기상 인증', r: allMetricCorrelations.wake_up?.avg ?? 0 },
+      { key: 'problem_30', label: '30문제 풀이', r: allMetricCorrelations.problem_30?.avg ?? 0 },
+      { key: 'explanation', label: '오답 해설', r: allMetricCorrelations.explanation?.avg ?? 0 },
+    ];
+    list.sort((a, b) => b.r - a.r);
+    return {
+      top: list[0] || { key: 'all' as HwMetric, label: '전체 과제', r: 0 },
+      rankingText: list.map(item => `${item.label.slice(0, 2)}(${item.r >= 0 ? '+' : ''}${item.r})`).join(' > ')
+    };
+  }, [allMetricCorrelations]);
+
+  // 3. 산점도 차트 데이터 및 선형 회귀선 (선택된 과제 항목 반영)
   const scatterData = useMemo(() => {
     let targetList: { name: string; x: number; y: number; id: string | null }[] = [];
     let currentR = correlationStats.avg;
@@ -176,7 +234,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
         .filter(d => d.avgScore !== null)
         .map(d => ({
           name: showRealName && d.realName ? d.realName : d.maskedName,
-          x: d.hwRate!,
+          x: getStudentMetricRate(d, selectedHwMetric),
           y: d.avgScore!,
           id: d.studentId
         }));
@@ -187,7 +245,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
         .filter(d => typeof d.roundScores[rNum] === 'number')
         .map(d => ({
           name: showRealName && d.realName ? d.realName : d.maskedName,
-          x: d.hwRate!,
+          x: getStudentMetricRate(d, selectedHwMetric),
           y: d.roundScores[rNum]!,
           id: d.studentId
         }));
@@ -210,11 +268,18 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
       r: currentR,
       count: targetList.length
     };
-  }, [matchedStudents, selectedRoundFilter, showRealName, correlationStats]);
+  }, [matchedStudents, selectedRoundFilter, showRealName, correlationStats, selectedHwMetric]);
 
-  // 4. 시계열 추이 차트 데이터
+  // 4. 시계열 추이 차트 데이터 (특정 회차까지의 데이터만 적용)
   const timeSeriesData = useMemo(() => {
-    const sorted = [...matchedStudents].sort((a, b) => (b.hwRate || 0) - (a.hwRate || 0));
+    // 1회차부터 timeSeriesEndRound까지만 적용
+    const filteredRounds = rounds.filter(r => r.round <= timeSeriesEndRound);
+
+    const sorted = [...matchedStudents].sort((a, b) => {
+      const aVal = getStudentMetricRate(a, selectedHwMetric);
+      const bVal = getStudentMetricRate(b, selectedHwMetric);
+      return bVal - aVal;
+    });
     const k = Math.max(1, Math.floor(sorted.length * 0.3));
     const topGroup = sorted.slice(0, k);
     const bottomGroup = sorted.slice(-k);
@@ -228,14 +293,19 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
         : null;
     };
 
-    return rounds.map(r => ({
+    return filteredRounds.map(r => ({
       round: `${r.round}회차`,
-      r: correlationStats.roundCorrs[r.round] ?? 0,
+      roundNum: r.round,
+      전체과제_r: allMetricCorrelations.all?.roundCorrs[r.round] ?? 0,
+      기상인증_r: allMetricCorrelations.wake_up?.roundCorrs[r.round] ?? 0,
+      문제30_r: allMetricCorrelations.problem_30?.roundCorrs[r.round] ?? 0,
+      해설_r: allMetricCorrelations.explanation?.roundCorrs[r.round] ?? 0,
+      r: allMetricCorrelations[selectedHwMetric]?.roundCorrs[r.round] ?? 0,
       전체평균: r.mean,
       과제상위30: getGroupMean(topGroup, r.round),
       과제하위30: getGroupMean(bottomGroup, r.round)
     }));
-  }, [matchedStudents, correlationStats, rounds]);
+  }, [matchedStudents, allMetricCorrelations, selectedHwMetric, rounds, timeSeriesEndRound]);
 
   // 5. 군집 분석 (4분면 매트릭스)
   const clusters = useMemo(() => {
@@ -360,7 +430,72 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
     setNewStudentScore('');
   };
 
-  const latestRound = rounds[rounds.length - 1];
+  // 초기 데이터로 복원
+  const handleResetToDefault = async () => {
+    if (!window.confirm("1~11회차 데이터를 기본 원본 데이터로 초기화하시겠습니까?")) return;
+    await updateRounds(MOCK_EXAM_ROUNDS);
+    setSelectedEditRound(1);
+    alert("1~11회차 데이터가 기본값으로 복원되었습니다.");
+  };
+
+  // 학생 이름 수정 (마스킹 -> 실명 변경 등)
+  const handleRenameStudent = async (oldName: string, newName: string) => {
+    if (!newName.trim() || newName.trim() === oldName) {
+      setEditingStudentOriginalName(null);
+      return;
+    }
+    const updated = rounds.map(r => {
+      if (r.round === selectedEditRound && r.scores[oldName] !== undefined) {
+        const sc = r.scores[oldName];
+        const nextScores = { ...r.scores };
+        delete nextScores[oldName];
+        nextScores[newName.trim()] = sc;
+        return { ...r, scores: nextScores };
+      }
+      return r;
+    });
+    await updateRounds(updated);
+    setEditingStudentOriginalName(null);
+  };
+
+  // 회차별 학생 목록 필터링 및 가나다순 정렬
+  const filteredRawStudents = useMemo(() => {
+    if (!activeEditRoundData) return [];
+    let entries = Object.entries(activeEditRoundData.scores).map(([name, sc]) => {
+      const dispName = getDisplayName(name);
+      return { name, dispName, score: sc };
+    });
+
+    // 1. 검색어 필터
+    if (rawSearchQuery.trim()) {
+      const q = rawSearchQuery.toLowerCase();
+      entries = entries.filter(e =>
+        e.dispName.toLowerCase().includes(q) || e.name.toLowerCase().includes(q)
+      );
+    }
+
+    // 2. 점수대 필터
+    if (rawScoreFilter === 'ge80') {
+      entries = entries.filter(e => e.score >= 80);
+    } else if (rawScoreFilter === '70s') {
+      entries = entries.filter(e => e.score >= 70 && e.score < 80);
+    } else if (rawScoreFilter === 'lt70') {
+      entries = entries.filter(e => e.score < 70);
+    }
+
+    // 3. 정렬 (기본: 가나다순)
+    if (rawSortBy === 'name') {
+      entries.sort((a, b) => a.dispName.localeCompare(b.dispName, 'ko'));
+    } else if (rawSortBy === 'score_desc') {
+      entries.sort((a, b) => b.score - a.score || a.dispName.localeCompare(b.dispName, 'ko'));
+    } else if (rawSortBy === 'score_asc') {
+      entries.sort((a, b) => a.score - b.score || a.dispName.localeCompare(b.dispName, 'ko'));
+    }
+
+    return entries;
+  }, [activeEditRoundData, rawSearchQuery, rawScoreFilter, rawSortBy, students]);
+
+  const latestRound = rounds.find(r => Object.keys(r.scores).length > 0) || rounds[0];
 
   return (
     <div className="max-w-5xl mx-auto p-4 space-y-6">
@@ -416,14 +551,20 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
       {/* 핵심 지표 요약 카드 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">최신 상관계수 ({latestRound?.round}회차)</span>
+          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">
+            최신 상관계수 ({latestRound?.round}회차 · {HW_METRICS.find(m => m.key === selectedHwMetric)?.short})
+          </span>
           <div className="flex items-baseline gap-1 mt-1">
             <span className="text-2xl font-black text-indigo-600">
-              r = +{correlationStats.roundCorrs[latestRound?.round] ?? 0}
+              r = {correlationStats.roundCorrs[latestRound?.round] !== undefined
+                ? (correlationStats.roundCorrs[latestRound?.round] >= 0
+                  ? `+${correlationStats.roundCorrs[latestRound?.round]}`
+                  : correlationStats.roundCorrs[latestRound?.round])
+                : '0'}
             </span>
           </div>
-          <p className="text-[10px] text-gray-400 mt-0.5">
-            {rounds.map(r => `${r.round}회(${correlationStats.roundCorrs[r.round]})`).join(' → ')}
+          <p className="text-[10px] text-gray-400 mt-0.5 truncate">
+            {rounds.filter(r => Object.keys(r.scores).length > 0).map(r => `${r.round}회(${correlationStats.roundCorrs[r.round] ?? 0})`).join(' → ')}
           </p>
         </div>
 
@@ -448,9 +589,12 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
         <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
           <span className="text-[11px] font-bold text-gray-400 uppercase tracking-wider block">과제 영향도 1위 항목</span>
           <div className="flex items-baseline gap-1 mt-1">
-            <span className="text-2xl font-black text-purple-600">기상 인증</span>
+            <span className="text-2xl font-black text-purple-600">{topImpactingMetric.top.label}</span>
+            <span className="text-xs text-purple-500 font-bold">
+              r = {topImpactingMetric.top.r >= 0 ? `+${topImpactingMetric.top.r}` : topImpactingMetric.top.r}
+            </span>
           </div>
-          <p className="text-[10px] text-gray-400 mt-0.5">기상(0.21) &gt; 해설(0.15) &gt; 30제(0.02)</p>
+          <p className="text-[10px] text-gray-400 mt-0.5 truncate">{topImpactingMetric.rankingText}</p>
         </div>
       </div>
 
@@ -557,7 +701,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                 </span>
               </h3>
               <p className="text-xs text-gray-400">
-                각 점에 마우스를 올리면 학생 정보와 점수를 확인할 수 있습니다.
+                원하는 과제 항목(전체/기상/30문제/해설)을 선택하여 성적과의 상관관계를 비교할 수 있습니다.
               </p>
             </div>
             <div className="text-right">
@@ -569,6 +713,39 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
             </div>
           </div>
 
+          {/* 세부 과제 항목 선택 카드 바 */}
+          <div className="space-y-1.5 pt-1">
+            <span className="text-[11px] font-bold text-gray-400 block">분석 과제 항목 선택</span>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {HW_METRICS.map(m => {
+                const isSelected = selectedHwMetric === m.key;
+                const metricR = selectedRoundFilter === 'all'
+                  ? allMetricCorrelations[m.key]?.avg ?? 0
+                  : allMetricCorrelations[m.key]?.roundCorrs[parseInt(selectedRoundFilter, 10)] ?? 0;
+                return (
+                  <button
+                    key={m.key}
+                    onClick={() => setSelectedHwMetric(m.key)}
+                    className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-100'
+                        : 'bg-white hover:bg-gray-50 border-gray-200 text-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className={`text-xs font-bold ${isSelected ? 'text-white' : 'text-gray-800'}`}>
+                        {m.label}
+                      </span>
+                      <span className={`text-xs font-black ${isSelected ? 'text-yellow-200' : m.color}`}>
+                        r = {metricR >= 0 ? `+${metricR}` : metricR}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="h-72 w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
@@ -576,11 +753,17 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                 <XAxis
                   type="number"
                   dataKey="x"
-                  name="과제제출률"
+                  name={HW_METRICS.find(m => m.key === selectedHwMetric)?.label || '과제제출률'}
                   unit="%"
                   domain={[0, 100]}
                   tick={{ fontSize: 11, fill: '#64748b' }}
-                  label={{ value: '과제 제출률 (%)', position: 'bottom', offset: 0, fontSize: 11, fill: '#64748b' }}
+                  label={{
+                    value: `${HW_METRICS.find(m => m.key === selectedHwMetric)?.label || '과제'} 제출률 (%)`,
+                    position: 'bottom',
+                    offset: 0,
+                    fontSize: 11,
+                    fill: '#64748b'
+                  }}
                 />
                 <YAxis
                   type="number"
@@ -596,10 +779,11 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                   content={({ payload }) => {
                     if (payload && payload.length > 0) {
                       const data = payload[0].payload;
+                      const metricLabel = HW_METRICS.find(m => m.key === selectedHwMetric)?.label || '과제제출률';
                       return (
                         <div className="bg-gray-900 text-white p-2.5 rounded-xl text-xs shadow-xl space-y-1">
                           <p className="font-extrabold text-yellow-300">{data.name}</p>
-                          <p>과제제출률: <span className="font-bold">{data.x}%</span></p>
+                          <p>{metricLabel}: <span className="font-bold">{data.x}%</span></p>
                           <p>모의고사 점수: <span className="font-bold text-indigo-200">{data.y}점</span></p>
                         </div>
                       );
@@ -608,7 +792,12 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                   }}
                 />
                 <ReferenceLine y={72} stroke="#cbd5e1" strokeDasharray="3 3" label={{ value: '평균 약 72점', fill: '#94a3b8', fontSize: 10 }} />
-                <ReferenceLine x={50} stroke="#cbd5e1" strokeDasharray="3 3" label={{ value: '과제 50%', fill: '#94a3b8', fontSize: 10 }} />
+                <ReferenceLine
+                  x={50}
+                  stroke="#cbd5e1"
+                  strokeDasharray="3 3"
+                  label={{ value: `${HW_METRICS.find(m => m.key === selectedHwMetric)?.short} 50%`, fill: '#94a3b8', fontSize: 10 }}
+                />
                 <Scatter
                   name="학생"
                   data={scatterData.points}
@@ -630,8 +819,11 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
             <div>
               <span className="font-bold">상관관계 요약: </span>
               {selectedRoundFilter === 'all'
-                ? `전체 회차 누적 기준 상관계수는 r = +${scatterData.r}입니다. 과제 수행 루틴이 안정적인 학생일수록 고득점을 유지하고 있습니다.`
-                : `${selectedRoundFilter}회차 기준 상관계수는 r = +${scatterData.r}입니다. 회차가 누적될수록 성실도가 점수에 미치는 영향력이 점진적으로 강화되는 추세를 보입니다.`}
+                ? `전체 회차 누적 기준 [${HW_METRICS.find(m => m.key === selectedHwMetric)?.label}] 상관계수는 r = ${scatterData.r >= 0 ? `+${scatterData.r}` : scatterData.r}입니다.`
+                : `${selectedRoundFilter}회차 기준 [${HW_METRICS.find(m => m.key === selectedHwMetric)?.label}] 상관계수는 r = ${scatterData.r >= 0 ? `+${scatterData.r}` : scatterData.r}입니다.`}
+              {scatterData.r >= 0.3
+                ? ' 뚜렷한 양의 상관관계를 보여 성적 견인에 긍정적인 영향을 미치고 있습니다.'
+                : ' 현재 회차 표본에서의 성실도-점수 관계를 보여주고 있습니다.'}
             </div>
           </div>
         </Card>
@@ -639,70 +831,113 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
 
       {/* 탭 2: 시계열 추이 분석 */}
       {activeSubTab === 'timeseries' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Card className="p-5 space-y-3">
-            <div>
-              <h3 className="font-extrabold text-gray-900 text-sm flex items-center gap-1.5">
-                <TrendingUp size={16} className="text-indigo-600" />
-                회차별 과제제출률-성적 상관계수($r$) 추이
-              </h3>
-              <p className="text-xs text-gray-400">회차가 거듭될수록 상관계수가 가파르게 상승하고 있습니다.</p>
+        <div className="space-y-4">
+          {/* 회차 적용 범위 컨트롤바 */}
+          <div className="bg-white p-3.5 rounded-2xl border border-gray-100 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <Filter size={16} className="text-indigo-600" />
+              <span className="text-xs font-bold text-gray-700">시계열 분석 반영 범위:</span>
+              <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                1회차 ~ {timeSeriesEndRound}회차까지 적용
+              </span>
             </div>
-            <div className="h-60 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={timeSeriesData} margin={{ top: 20, right: 20, bottom: 10, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="round" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis domain={[0, 0.4]} tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <Tooltip
-                    content={({ payload }) => {
-                      if (payload && payload.length > 0) {
-                        const d = payload[0].payload;
-                        return (
-                          <div className="bg-gray-900 text-white p-2 rounded-xl text-xs space-y-1">
-                            <p className="font-bold text-yellow-300">{d.round}</p>
-                            <p>상관계수: <span className="font-bold text-indigo-300">r = +{d.r}</span></p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    }}
-                  />
-                  <Line type="monotone" dataKey="r" stroke="#4f46e5" strokeWidth={3} dot={{ r: 6, fill: '#4f46e5' }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="text-[11px] text-gray-500 font-medium bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-              📊 1회차(+0.20) → 2회차(+0.25) → 3회차(+0.32). 실전 모의고사 훈련이 누적될수록 평소 과제량이 점수 하방을 지지합니다.
-            </div>
-          </Card>
 
-          <Card className="p-5 space-y-3">
-            <div>
-              <h3 className="font-extrabold text-gray-900 text-sm flex items-center gap-1.5">
-                <Award size={16} className="text-emerald-600" />
-                과제 상위 30% vs 하위 30% 성적 격차
-              </h3>
-              <p className="text-xs text-gray-400">과제 성실도에 따른 집단별 평균 점수 추이</p>
+            {/* 회차 선택 버튼 그룹 */}
+            <div className="flex items-center gap-1 overflow-x-auto pb-1 sm:pb-0">
+              {rounds.map(r => {
+                const hasData = Object.keys(r.scores).length > 0;
+                const isSelected = timeSeriesEndRound === r.round;
+                return (
+                  <button
+                    key={r.round}
+                    onClick={() => setTimeSeriesEndRound(r.round)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
+                      isSelected
+                        ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-100'
+                        : hasData
+                        ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        : 'bg-gray-50 text-gray-400 hover:bg-gray-100'
+                    }`}
+                  >
+                    {r.round}회차까지
+                  </button>
+                );
+              })}
             </div>
-            <div className="h-60 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={timeSeriesData} margin={{ top: 20, right: 20, bottom: 10, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                  <XAxis dataKey="round" tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <YAxis domain={[50, 90]} tick={{ fontSize: 11, fill: '#64748b' }} />
-                  <Tooltip />
-                  <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
-                  <Line type="monotone" dataKey="과제상위30" stroke="#10b981" strokeWidth={2.5} dot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="전체평균" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" />
-                  <Line type="monotone" dataKey="과제하위30" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="text-[11px] text-gray-500 font-medium bg-gray-50 p-2.5 rounded-xl border border-gray-100">
-              💡 과제 상위 그룹은 3회차에서 전원 76점 이상의 고득점을 기록하며 점수 안정성이 대폭 상승했습니다.
-            </div>
-          </Card>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <Card className="p-5 space-y-3">
+              <div>
+                <h3 className="font-extrabold text-gray-900 text-sm flex items-center gap-1.5">
+                  <TrendingUp size={16} className="text-indigo-600" />
+                  항목별 상관계수($r$) 시계열 추이 (1~{timeSeriesEndRound}회차)
+                </h3>
+                <p className="text-xs text-gray-400">전체 과제 및 기상·30제·해설별 성적 상관계수 변화</p>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={timeSeriesData} margin={{ top: 20, right: 20, bottom: 10, left: -10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="round" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis domain={[-0.2, 0.6]} tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <Tooltip
+                      content={({ payload }) => {
+                        if (payload && payload.length > 0) {
+                          const d = payload[0].payload;
+                          return (
+                            <div className="bg-gray-900 text-white p-2.5 rounded-xl text-xs space-y-1 shadow-lg">
+                              <p className="font-bold text-yellow-300">{d.round}</p>
+                              <p className="text-indigo-300">전체 과제: r = {d.전체과제_r >= 0 ? `+${d.전체과제_r}` : d.전체과제_r}</p>
+                              <p className="text-blue-300">기상 인증: r = {d.기상인증_r >= 0 ? `+${d.기상인증_r}` : d.기상인증_r}</p>
+                              <p className="text-emerald-300">30문제: r = {d.문제30_r >= 0 ? `+${d.문제30_r}` : d.문제30_r}</p>
+                              <p className="text-purple-300">오답 해설: r = {d.해설_r >= 0 ? `+${d.해설_r}` : d.해설_r}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                    <Line type="monotone" name="전체 과제" dataKey="전체과제_r" stroke="#4f46e5" strokeWidth={3} dot={{ r: 5 }} />
+                    <Line type="monotone" name="기상 인증" dataKey="기상인증_r" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
+                    <Line type="monotone" name="30문제" dataKey="문제30_r" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
+                    <Line type="monotone" name="오답 해설" dataKey="해설_r" stroke="#a855f7" strokeWidth={2} dot={{ r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="text-[11px] text-gray-500 font-medium bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                📊 {timeSeriesData.map(d => `${d.round}(+${d.전체과제_r})`).join(' → ')}. 회차가 거듭될수록 과제 성실도가 성적을 지지하는 경향을 추적합니다.
+              </div>
+            </Card>
+
+            <Card className="p-5 space-y-3">
+              <div>
+                <h3 className="font-extrabold text-gray-900 text-sm flex items-center gap-1.5">
+                  <Award size={16} className="text-emerald-600" />
+                  과제 상위 30% vs 하위 30% 성적 격차 (1~{timeSeriesEndRound}회차)
+                </h3>
+                <p className="text-xs text-gray-400">과제 성실도({HW_METRICS.find(m => m.key === selectedHwMetric)?.label})에 따른 집단별 평균 점수 추이</p>
+              </div>
+              <div className="h-64 w-full">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={timeSeriesData} margin={{ top: 20, right: 20, bottom: 10, left: -10 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                    <XAxis dataKey="round" tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <YAxis domain={[50, 95]} tick={{ fontSize: 11, fill: '#64748b' }} />
+                    <Tooltip />
+                    <Legend wrapperStyle={{ fontSize: 11, paddingTop: 10 }} />
+                    <Line type="monotone" name="과제 상위 30%" dataKey="과제상위30" stroke="#10b981" strokeWidth={2.5} dot={{ r: 5 }} />
+                    <Line type="monotone" name="전체 평균" dataKey="전체평균" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="3 3" />
+                    <Line type="monotone" name="과제 하위 30%" dataKey="과제하위30" stroke="#ef4444" strokeWidth={2.5} dot={{ r: 5 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="text-[11px] text-gray-500 font-medium bg-gray-50 p-2.5 rounded-xl border border-gray-100">
+                💡 1~{timeSeriesEndRound}회차 집계 결과, 과제 상위 그룹은 안정적인 점수대를 유지하고 있습니다.
+              </div>
+            </Card>
+          </div>
         </div>
       )}
 
@@ -860,13 +1095,22 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                       </td>
                       <td className="py-3 px-3 font-semibold">
                         {d.hwRate !== null ? (
-                          <div className="flex items-center gap-2">
-                            <span className="font-extrabold text-indigo-600">{d.hwRate}%</span>
-                            <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
-                              <div
-                                className="bg-indigo-500 h-full rounded-full"
-                                style={{ width: `${d.hwRate}%` }}
-                              ></div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-extrabold text-indigo-600">{d.hwRate}%</span>
+                              <div className="w-16 bg-gray-100 h-1.5 rounded-full overflow-hidden">
+                                <div
+                                  className="bg-indigo-500 h-full rounded-full"
+                                  style={{ width: `${d.hwRate}%` }}
+                                ></div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1.5 text-[10px] text-gray-400">
+                              <span title="기상 인증">기상 {d.wakeUpRate ?? 0}%</span>
+                              <span>·</span>
+                              <span title="30문제 풀이">30제 {d.problem30Rate ?? 0}%</span>
+                              <span>·</span>
+                              <span title="오답 해설">해설 {d.explanationRate ?? 0}%</span>
                             </div>
                           </div>
                         ) : (
@@ -911,22 +1155,40 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
           <div className="flex items-center justify-between bg-white p-3 rounded-2xl border border-gray-100 shadow-sm flex-wrap gap-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-xs font-black text-gray-400 mr-1">회차 선택:</span>
-              {rounds.map(r => (
-                <button
-                  key={r.round}
-                  onClick={() => setSelectedEditRound(r.round)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
-                    selectedEditRound === r.round
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                  }`}
-                >
-                  {r.round}회차 ({Object.keys(r.scores).length}명)
-                </button>
-              ))}
+              {rounds.map(r => {
+                const count = Object.keys(r.scores).length;
+                return (
+                  <button
+                    key={r.round}
+                    onClick={() => setSelectedEditRound(r.round)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                      selectedEditRound === r.round
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : count > 0
+                          ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                          : 'bg-gray-50 text-gray-400 hover:bg-gray-100 border border-dashed border-gray-200'
+                    }`}
+                  >
+                    {r.round}회차
+                    {count > 0 ? (
+                      <span className="ml-1 text-[10px] opacity-80">({count}명)</span>
+                    ) : (
+                      <span className="ml-1 text-[9px] opacity-60">(예정)</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
 
             <div className="flex items-center gap-2">
+              <button
+                onClick={handleResetToDefault}
+                className="flex items-center gap-1 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-xl transition-all"
+                title="기본 1~11회차 원본 데이터로 초기화"
+              >
+                <RotateCcw size={14} />
+                <span>기본값 복원</span>
+              </button>
               <button
                 onClick={() => setRawTextModalOpen(true)}
                 className="flex items-center gap-1 text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-all"
@@ -1077,6 +1339,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
 
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       <input
+                        key={`score-${selectedEditRound}-${name}`}
                         type="number"
                         defaultValue={score}
                         onBlur={(e) => {
