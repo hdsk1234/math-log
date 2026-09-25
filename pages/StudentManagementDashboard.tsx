@@ -4,10 +4,11 @@ import { StudentData, HomeworkType } from '../types';
 import { StudentList } from '../components/StudentList';
 import { QuickUpdateDashboard } from '../components/QuickUpdateDashboard';
 import { StudentRankings } from '../components/StudentRankings';
-import { GraduationCap, LogOut, List, Zap, Copy, Trophy, Shield, Bot, Image as ImageIcon, ChevronDown, ChevronUp, BarChart3 } from 'lucide-react';
+import { GraduationCap, LogOut, List, Zap, Copy, Trophy, Shield, Bot, Image as ImageIcon, ChevronDown, ChevronUp, BarChart3, TrendingUp } from 'lucide-react';
 import { DashboardExportModal } from '../components/DashboardExportModal';
 import { TelegramLogTab } from '../components/TelegramLogTab';
 import { HomeworkImageFeed } from '../components/HomeworkImageFeed';
+import { MockExamStats } from '../components/MockExamStats';
 
 interface Props {
   students: StudentData[];
@@ -45,8 +46,8 @@ export const StudentManagementDashboard: React.FC<Props> = ({
 }) => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const viewMode = (searchParams.get('tab') as 'list' | 'quick' | 'rankings' | 'logs') || 'list';
-  const setViewMode = (mode: 'list' | 'quick' | 'rankings' | 'logs') => setSearchParams({ tab: mode });
+  const viewMode = (searchParams.get('tab') as 'list' | 'quick' | 'rankings' | 'mock' | 'logs') || 'list';
+  const setViewMode = (mode: 'list' | 'quick' | 'rankings' | 'mock' | 'logs') => setSearchParams({ tab: mode });
   const [showToast, setShowToast] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [showRawLogs, setShowRawLogs] = useState(false);
@@ -200,16 +201,25 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               )}
               <button
                 onClick={() => setViewMode('rankings')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'rankings'
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'rankings'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                   }`}
               >
-                <BarChart3 size={14} /> 통계
+                <Trophy size={14} /> 과제 순위
+              </button>
+              <button
+                onClick={() => setViewMode('mock')}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'mock'
+                  ? 'bg-white text-indigo-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+                  }`}
+              >
+                <TrendingUp size={14} /> 실모반
               </button>
               <button
                 onClick={() => setViewMode('logs')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'logs'
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-bold transition-all ${viewMode === 'logs'
                   ? 'bg-white text-indigo-600 shadow-sm'
                   : 'text-gray-500 hover:text-gray-700'
                   }`}
@@ -235,12 +245,12 @@ export const StudentManagementDashboard: React.FC<Props> = ({
 
             <button
               onClick={() => setIsExportModalOpen(true)}
-              className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 p-2 sm:px-3 sm:py-1.5 rounded-md transition-all border border-gray-200 cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 text-xs font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 p-2 sm:px-2.5 sm:py-1.5 rounded-md transition-all border border-gray-200 cursor-pointer"
               title="과제 현황 대시보드 이미지 및 텍스트 양식을 생성합니다."
             >
-              <Copy size={16} className="text-indigo-600" />
-              <span className="hidden md:inline">과제 현황 이미지 생성</span>
-              <span className="md:hidden text-[10px]">이미지 생성</span>
+              <Copy size={15} className="text-indigo-600" />
+              <span className="hidden xl:inline">과제 현황 이미지 생성</span>
+              <span className="hidden sm:inline xl:hidden">이미지 생성</span>
             </button>
 
             <button
@@ -262,7 +272,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
             viewMode === 'list' ? 'text-indigo-600' : 'text-gray-400'
           }`}
         >
-          <List size={20} />
+          <List size={18} />
           <span>학생 관리</span>
         </button>
         {canEdit && isMasterTeacher && (
@@ -272,7 +282,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
               viewMode === 'quick' ? 'text-indigo-600' : 'text-gray-400'
             }`}
           >
-            <Zap size={20} />
+            <Zap size={18} />
             <span>빠른 기록</span>
           </button>
         )}
@@ -282,8 +292,17 @@ export const StudentManagementDashboard: React.FC<Props> = ({
             viewMode === 'rankings' ? 'text-indigo-600' : 'text-gray-400'
           }`}
         >
-          <BarChart3 size={20} />
-          <span>통계</span>
+          <Trophy size={18} />
+          <span>과제 순위</span>
+        </button>
+        <button
+          onClick={() => setViewMode('mock')}
+          className={`flex flex-col items-center gap-1 text-[10px] font-bold transition-all ${
+            viewMode === 'mock' ? 'text-indigo-600' : 'text-gray-400'
+          }`}
+        >
+          <TrendingUp size={18} />
+          <span>실모반</span>
         </button>
         <button
           onClick={() => setViewMode('logs')}
@@ -291,7 +310,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
             viewMode === 'logs' ? 'text-indigo-600' : 'text-gray-400'
           }`}
         >
-          <ImageIcon size={20} />
+          <ImageIcon size={18} />
           <span>제출 이미지</span>
         </button>
       </div>
@@ -307,6 +326,7 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           canEdit={canEdit}
         />
       )}
+
       {viewMode === 'quick' && isMasterTeacher && (
         <QuickUpdateDashboard
           students={displayStudents}
@@ -321,6 +341,14 @@ export const StudentManagementDashboard: React.FC<Props> = ({
           onSelectStudent={onSelectStudent}
           onUpdateStudent={onUpdateStudent}
           role="teacher"
+        />
+      )}
+
+      {viewMode === 'mock' && (
+        <MockExamStats
+          students={students}
+          role="teacher"
+          onSelectStudent={onSelectStudent}
         />
       )}
       {viewMode === 'logs' && (

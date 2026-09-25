@@ -141,6 +141,11 @@ export const MOCK_EXAM_ROUNDS: ExamRound[] = [
 // 마스킹 이름과 실제 DB 학생 일치 매칭 (이름 마스킹 패턴 기반)
 export function matchStudentByMask(maskedName: string, students: StudentData[]): StudentData | null {
   const cleanMask = maskedName.trim();
+  // 사용자가 명시적으로 제외한 학생 (이○수는 이준수가 아니라 DB에 없는 이호수)
+  if (cleanMask === '이○수') {
+    return null;
+  }
+
   const matched = students.filter(s => {
     const cleanReal = (s.profile?.name || '').replace(/[0-9]/g, '').trim();
     if (cleanMask.length === 2) {
@@ -162,6 +167,94 @@ export function matchStudentByMask(maskedName: string, students: StudentData[]):
     return (b.homework?.length || 0) - (a.homework?.length || 0);
   });
   return matched[0];
+}
+
+// 실모반 결과 텍스트 파서
+export function parseMockExamText(text: string, defaultRound?: number): {
+  round: number;
+  title: string;
+  date: string;
+  totalCandidates: number;
+  recordedCandidates: number;
+  mean: number;
+  median: number;
+  highest: number;
+  scores: Record<string, number>;
+} {
+  const scores: Record<string, number> = {};
+
+  // 1. 회차 추출
+  const roundMatch = text.match(/([0-9]+)\s*회차/);
+  const round = roundMatch ? parseInt(roundMatch[1], 10) : (defaultRound || 1);
+
+  // 2. 응시일 추출
+  const dateMatch = text.match(/응시일:\s*([0-9]{4}년\s*[0-9]+월\s*[0-9]+일|[0-9]{4}-[0-9]{2}-[0-9]{2})/);
+  let date = new Date().toISOString().split('T')[0];
+  if (dateMatch) {
+    const dStr = dateMatch[1].replace(/년|월/g, '-').replace(/일/g, '').replace(/\s+/g, '');
+    const parts = dStr.split('-');
+    if (parts.length === 3) {
+      date = `${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`;
+    }
+  }
+
+  // 3. 통계 지표 추출
+  const totalMatch = text.match(/총\s*응시\s*인원:\s*([0-9]+)명|응시\s*인원:\s*([0-9]+)명/);
+  const totalCandidates = totalMatch ? parseInt(totalMatch[1] || totalMatch[2], 10) : 0;
+
+  const recMatch = text.match(/성적\s*집계:\s*([0-9]+)명/);
+  const recordedCandidates = recMatch ? parseInt(recMatch[1], 10) : totalCandidates;
+
+  const meanMatch = text.match(/평균:\s*(약\s*)?([0-9.]+)/);
+  const mean = meanMatch ? parseFloat(meanMatch[2]) : 0;
+
+  const medianMatch = text.match(/중앙값:\s*([0-9.]+)/);
+  const median = medianMatch ? parseFloat(medianMatch[1]) : 0;
+
+  const highMatch = text.match(/최고점:\s*([0-9]+)/);
+  const highest = highMatch ? parseInt(highMatch[1], 10) : 0;
+
+  // 4. 성적순 명단 파싱
+  // 패턴: "1등 · 정○윤 · 92점", "공동 2등 · 김○욱 · 88점", "1등 이○수 92점", "3등 정○윤 88점"
+  const lines = text.split('\n');
+  lines.forEach(line => {
+    const cleaned = line.trim();
+    if (!cleaned) return;
+
+    // 패턴 1: 1등 · 정○윤 · 92점
+    const p1 = cleaned.match(/(?:공동\s*)?[0-9]+등\s*[·•\s]\s*([가-힣○*]+)\s*[·•\s]\s*([0-9]+)점?/);
+    if (p1) {
+      const name = p1[1].trim();
+      const score = parseInt(p1[2], 10);
+      if (name && !isNaN(score)) {
+        scores[name] = score;
+        return;
+      }
+    }
+
+    // 패턴 2: 1등 이○수 92점
+    const p2 = cleaned.match(/(?:공동\s*)?[0-9]+등\s+([가-힣○*]+)\s+([0-9]+)점?/);
+    if (p2) {
+      const name = p2[1].trim();
+      const score = parseInt(p2[2], 10);
+      if (name && !isNaN(score)) {
+        scores[name] = score;
+        return;
+      }
+    }
+  });
+
+  return {
+    round,
+    title: `${round}회차 실모`,
+    date,
+    totalCandidates: totalCandidates || Object.keys(scores).length,
+    recordedCandidates: recordedCandidates || Object.keys(scores).length,
+    mean: mean || (Object.values(scores).length > 0 ? Math.round((Object.values(scores).reduce((a, b) => a + b, 0) / Object.values(scores).length) * 100) / 100 : 0),
+    median: median || 0,
+    highest: highest || (Object.values(scores).length > 0 ? Math.max(...Object.values(scores)) : 0),
+    scores
+  };
 }
 
 // 학생별 수업 시작일 ~ 현재(today) 과제제출률 계산

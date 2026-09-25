@@ -1,10 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { StudentData, HomeworkType, UserRole } from '../types';
 import { Card } from './Card';
-import { Trophy, Search, Users, Calendar, Star, Award, Camera, ClipboardCheck, BarChart3 } from 'lucide-react';
+import { Trophy, Search, Users, Calendar, Star, Award, Camera, ClipboardCheck } from 'lucide-react';
 import { toPng, toBlob } from 'html-to-image';
 import { DashboardImageRender, StudentStats } from './DashboardImageRender';
-import { MockExamStats } from './MockExamStats';
 import { calculateStreak } from '../constants';
 
 interface Props {
@@ -444,11 +443,11 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-extrabold text-gray-900 flex items-center gap-2">
-            <BarChart3 className="text-indigo-600" />
-            통계
+            <Trophy className="text-indigo-600" />
+            과제 순위
           </h1>
           <p className="text-gray-500 text-sm mt-1">
-            학생들의 과제 제출 현황 및 실전 모의고사 성취도 통계를 확인합니다.
+            학생들의 과제 제출 현황과 순위를 확인합니다.
           </p>
         </div>
 
@@ -817,13 +816,6 @@ export const StudentRankings: React.FC<Props> = ({ students, onSelectStudent, on
           </div>
         </Card>
       </div>
-
-      {/* 실전 모의고사 통계 및 상관관계 분석 섹션 (기존 이미지 캡처 대상 제외) */}
-      <MockExamStats
-        students={students}
-        role={role}
-        onSelectStudent={onSelectStudent}
-      />
 
       {/* Hidden container for the Dashboard Image Render */}
       <div style={{ position: 'absolute', top: -9999, left: -9999, pointerEvents: 'none' }}>
