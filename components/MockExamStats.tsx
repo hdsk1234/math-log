@@ -53,16 +53,27 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
 
   const [activeSubTab, setActiveSubTab] = useState<'scatter' | 'timeseries' | 'cluster' | 'table' | 'raw'>('scatter');
   const [selectedRoundFilter, setSelectedRoundFilter] = useState<string>('all');
-  const [showRealName, setShowRealName] = useState<boolean>(false);
+  const [showRealName, setShowRealName] = useState<boolean>(true); // 가운데 이름 가리지 않고 실명 기본 표시
   const [searchQuery, setSearchQuery] = useState<string>('');
 
   // Raw 데이터 관리 상태
   const [rawTextModalOpen, setRawTextModalOpen] = useState<boolean>(false);
   const [rawInputText, setRawInputText] = useState<string>('');
   const [selectedEditRound, setSelectedEditRound] = useState<number>(1);
-  const [editingScores, setEditingScores] = useState<Record<string, number>>({});
+  const [rawSearchQuery, setRawSearchQuery] = useState<string>('');
+  const [rawSortBy, setRawSortBy] = useState<'name' | 'score_desc' | 'score_asc'>('name'); // 기본 가나다순
+  const [rawScoreFilter, setRawScoreFilter] = useState<'all' | 'ge80' | '70s' | 'lt70'>('all');
+  const [editingStudentOriginalName, setEditingStudentOriginalName] = useState<string | null>(null);
+  const [editingStudentNewName, setEditingStudentNewName] = useState<string>('');
   const [newStudentName, setNewStudentName] = useState<string>('');
   const [newStudentScore, setNewStudentScore] = useState<string>('');
+
+  // 학생 실명 변환 헬퍼 (DB 매칭 시 실명 우선 반환)
+  const getDisplayName = (maskedOrKey: string): string => {
+    const student = matchStudentByMask(maskedOrKey, students);
+    if (student?.profile?.name) return student.profile.name;
+    return maskedOrKey;
+  };
 
   // 1. 실모반 전체 고유 학생 목록 수집 및 DB 연동 매칭
   const processedData = useMemo(() => {
@@ -722,7 +733,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                     onClick={() => s.studentId && onSelectStudent && onSelectStudent(s.studentId)}
                     className="inline-flex items-center gap-1 bg-gray-50 hover:bg-emerald-50 border border-gray-200 px-2 py-1 rounded-lg text-xs font-bold text-gray-700 cursor-pointer transition-colors"
                   >
-                    <span>{showRealName && s.realName ? s.realName : s.maskedName}</span>
+                    <span>{s.realName || s.maskedName}</span>
                     <span className="text-[10px] text-emerald-600 font-extrabold">{s.avgScore}점</span>
                     <span className="text-[10px] text-gray-400">({s.hwRate}%)</span>
                   </span>
@@ -745,7 +756,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                     onClick={() => s.studentId && onSelectStudent && onSelectStudent(s.studentId)}
                     className="inline-flex items-center gap-1 bg-gray-50 hover:bg-blue-50 border border-gray-200 px-2 py-1 rounded-lg text-xs font-bold text-gray-700 cursor-pointer transition-colors"
                   >
-                    <span>{showRealName && s.realName ? s.realName : s.maskedName}</span>
+                    <span>{s.realName || s.maskedName}</span>
                     <span className="text-[10px] text-blue-600 font-extrabold">{s.avgScore}점</span>
                     <span className="text-[10px] text-gray-400">({s.hwRate}%)</span>
                   </span>
@@ -768,7 +779,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                     onClick={() => s.studentId && onSelectStudent && onSelectStudent(s.studentId)}
                     className="inline-flex items-center gap-1 bg-gray-50 hover:bg-yellow-50 border border-gray-200 px-2 py-1 rounded-lg text-xs font-bold text-gray-700 cursor-pointer transition-colors"
                   >
-                    <span>{showRealName && s.realName ? s.realName : s.maskedName}</span>
+                    <span>{s.realName || s.maskedName}</span>
                     <span className="text-[10px] text-yellow-700 font-extrabold">{s.avgScore}점</span>
                     <span className="text-[10px] text-gray-400">({s.hwRate}%)</span>
                   </span>
@@ -791,7 +802,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                     onClick={() => s.studentId && onSelectStudent && onSelectStudent(s.studentId)}
                     className="inline-flex items-center gap-1 bg-gray-50 hover:bg-rose-50 border border-gray-200 px-2 py-1 rounded-lg text-xs font-bold text-gray-700 cursor-pointer transition-colors"
                   >
-                    <span>{showRealName && s.realName ? s.realName : s.maskedName}</span>
+                    <span>{s.realName || s.maskedName}</span>
                     <span className="text-[10px] text-rose-600 font-extrabold">{s.avgScore}점</span>
                     <span className="text-[10px] text-gray-400">({s.hwRate}%)</span>
                   </span>
@@ -839,7 +850,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                     >
                       <td className="py-3 px-4 font-bold text-gray-900">
                         <div className="flex items-center gap-1.5">
-                          <span>{showRealName && d.realName ? d.realName : d.maskedName}</span>
+                          <span>{d.realName || d.maskedName}</span>
                           {!d.isMatched && (
                             <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.2 rounded font-semibold border border-amber-200">
                               DB미등록
@@ -927,7 +938,6 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                 <button
                   onClick={() => handleDeleteRound(selectedEditRound)}
                   className="flex items-center gap-1 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 px-3 py-1.5 rounded-xl transition-all"
-                  title="현재 선택된 회차 전체 삭제"
                 >
                   <Trash2 size={14} />
                   <span>{selectedEditRound}회차 삭제</span>
@@ -945,7 +955,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                     {activeEditRoundData.title} 상세 데이터 ({activeEditRoundData.date})
                   </h3>
                   <p className="text-xs text-gray-400">
-                    평균: {activeEditRoundData.mean}점 | 최고: {activeEditRoundData.highest}점 | 등록 인원: {Object.keys(activeEditRoundData.scores).length}명
+                    평균: {activeEditRoundData.mean}점 | 최고: {activeEditRoundData.highest}점 | 전체 인원: {Object.keys(activeEditRoundData.scores).length}명
                   </p>
                 </div>
               </div>
@@ -954,7 +964,7 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
               <div className="flex items-center gap-2 bg-gray-50 p-2.5 rounded-xl border border-gray-200">
                 <input
                   type="text"
-                  placeholder="마스킹 학생명 (예: 홍○동)"
+                  placeholder="학생 이름 (예: 홍길동)"
                   value={newStudentName}
                   onChange={e => setNewStudentName(e.target.value)}
                   className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold text-gray-800 flex-1 focus:outline-none focus:ring-2 focus:ring-indigo-100"
@@ -968,47 +978,133 @@ export const MockExamStats: React.FC<Props> = ({ students, role, onSelectStudent
                 />
                 <button
                   onClick={handleAddNewStudentToRound}
-                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all"
+                  className="flex items-center gap-1 bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer"
                 >
                   <Plus size={14} />
                   <span>추가 / 갱신</span>
                 </button>
               </div>
 
-              {/* 회차 학생별 점수 그리드 */}
+              {/* 검색 및 필터 컨트롤 바 */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-indigo-50/40 p-2.5 rounded-xl border border-indigo-100/60">
+                <div className="flex items-center gap-2 flex-1">
+                  <input
+                    type="text"
+                    placeholder="학생 이름 검색 (가나다순)..."
+                    value={rawSearchQuery}
+                    onChange={e => setRawSearchQuery(e.target.value)}
+                    className="bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-medium text-gray-800 w-full sm:w-56 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                  />
+                  <select
+                    value={rawSortBy}
+                    onChange={e => setRawSortBy(e.target.value as any)}
+                    className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer"
+                  >
+                    <option value="name">가나다순 (기본)</option>
+                    <option value="score_desc">점수 높은순</option>
+                    <option value="score_asc">점수 낮은순</option>
+                  </select>
+                  <select
+                    value={rawScoreFilter}
+                    onChange={e => setRawScoreFilter(e.target.value as any)}
+                    className="bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs font-bold text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-100 cursor-pointer"
+                  >
+                    <option value="all">전체 점수</option>
+                    <option value="ge80">80점 이상</option>
+                    <option value="70s">70점대</option>
+                    <option value="lt70">70점 미만</option>
+                  </select>
+                </div>
+                <span className="text-[11px] font-bold text-indigo-700 px-1">
+                  표시 {filteredRawStudents.length}명 / 전체 {Object.keys(activeEditRoundData.scores).length}명
+                </span>
+              </div>
+
+              {/* 회차 학생별 점수 그리드 (가나다순 정렬 & 가운데 이름 표시) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                {Object.entries(activeEditRoundData.scores)
-                  .sort((a, b) => b[1] - a[1])
-                  .map(([name, sc]) => (
-                    <div
-                      key={name}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 border border-gray-200/70 hover:border-indigo-200 transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="font-extrabold text-xs text-gray-900">{name}</span>
-                        <input
-                          type="number"
-                          defaultValue={sc}
-                          onBlur={(e) => {
-                            const val = parseInt(e.target.value, 10);
-                            if (!isNaN(val) && val !== sc) {
-                              handleSaveStudentScore(name, val);
-                            }
-                          }}
-                          className="w-14 bg-white border border-gray-300 rounded px-1.5 py-0.5 text-xs font-bold text-indigo-700 text-center"
-                        />
-                        <span className="text-[10px] text-gray-400">점</span>
-                      </div>
+                {filteredRawStudents.map(({ name, dispName, score }) => (
+                  <div
+                    key={name}
+                    className="flex items-center justify-between p-2.5 rounded-xl bg-gray-50 border border-gray-200/70 hover:border-indigo-200 transition-colors"
+                  >
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0 pr-2">
+                      {editingStudentOriginalName === name ? (
+                        <div className="flex items-center gap-1 flex-1">
+                          <input
+                            type="text"
+                            value={editingStudentNewName}
+                            onChange={e => setEditingStudentNewName(e.target.value)}
+                            className="bg-white border border-indigo-400 rounded px-1.5 py-0.5 text-xs font-bold text-gray-900 w-24"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => handleRenameStudent(name, editingStudentNewName)}
+                            className="text-emerald-600 hover:text-emerald-700 p-0.5"
+                            title="저장"
+                          >
+                            <Check size={14} />
+                          </button>
+                          <button
+                            onClick={() => setEditingStudentOriginalName(null)}
+                            className="text-gray-400 hover:text-gray-600 p-0.5"
+                            title="취소"
+                          >
+                            <X size={14} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 truncate">
+                          {/* 실명 노출 (가운데 글자 안 가림) */}
+                          <span className="font-extrabold text-xs text-gray-900 truncate" title={`${dispName} (${name})`}>
+                            {dispName}
+                          </span>
+                          {name !== dispName && (
+                            <span className="text-[10px] text-gray-400 font-medium">({name})</span>
+                          )}
+                          <button
+                            onClick={() => {
+                              setEditingStudentOriginalName(name);
+                              setEditingStudentNewName(dispName);
+                            }}
+                            className="text-gray-300 hover:text-indigo-600 p-0.5 transition-colors"
+                            title="이름 수정"
+                          >
+                            <Edit2 size={11} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <input
+                        type="number"
+                        defaultValue={score}
+                        onBlur={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!isNaN(val) && val !== score) {
+                            handleSaveStudentScore(name, val);
+                          }
+                        }}
+                        className="w-14 bg-white border border-gray-300 rounded px-1.5 py-0.5 text-xs font-bold text-indigo-700 text-center"
+                      />
+                      <span className="text-[10px] text-gray-400">점</span>
                       <button
                         onClick={() => handleDeleteStudentScore(name)}
-                        className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors"
+                        className="text-gray-400 hover:text-red-500 p-1 rounded transition-colors ml-1"
                         title="삭제"
                       >
                         <Trash2 size={13} />
                       </button>
                     </div>
-                  ))}
+                  </div>
+                ))}
               </div>
+
+              {filteredRawStudents.length === 0 && (
+                <div className="text-center py-8 text-xs text-gray-400 font-medium">
+                  검색/필터 조건에 일치하는 학생이 없습니다.
+                </div>
+              )}
             </Card>
           )}
         </div>
