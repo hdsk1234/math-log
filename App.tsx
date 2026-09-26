@@ -50,6 +50,7 @@ function AppContent() {
   });
   const [googleDisplayName, setGoogleDisplayName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -88,6 +89,7 @@ function AppContent() {
             localStorage.setItem(`favorites_${user.email}`, JSON.stringify(favs));
 
             setIsLoading(false);
+            setIsAuthReady(true);
           } else {
             // Google authenticated, but pending registration in Firestore
             setRole('guest');
@@ -95,6 +97,7 @@ function AppContent() {
             setUserEmail(user.email);
             setTeacherName(null);
             setIsLoading(false);
+            setIsAuthReady(true);
           }
         }, (error) => {
           console.error("Teacher subscription error:", error);
@@ -103,6 +106,7 @@ function AppContent() {
           setUserEmail(user.email);
           setTeacherName(null);
           setIsLoading(false);
+          setIsAuthReady(true);
         });
       } else {
         setRole('guest');
@@ -116,6 +120,7 @@ function AppContent() {
         setFavoriteStudents(saved ? JSON.parse(saved) : []);
 
         setIsLoading(false);
+        setIsAuthReady(true);
       }
     });
 
@@ -200,7 +205,11 @@ function AppContent() {
       setActiveStudentId(student.id);
       setRole('student');
       setCanEdit(false);
-      navigate(`/student/${student.id}`);
+      const fromLocation = (location.state as any)?.from;
+      const redirectTarget = fromLocation 
+        ? `${fromLocation.pathname}${fromLocation.search || ''}${fromLocation.hash || ''}`
+        : `/student/${student.id}`;
+      navigate(redirectTarget);
       return true;
     }
     return false;
@@ -314,13 +323,19 @@ function AppContent() {
     }));
   }, [students, favoriteStudents]);
 
-  if (isLoading && role !== 'guest') {
+  if (!isAuthReady || (isLoading && role !== 'guest')) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
       </div>
     );
   }
+
+  const fromLocation = (location.state as any)?.from;
+  const redirectQuery = new URLSearchParams(location.search).get('redirect');
+  const teacherRedirectTarget = fromLocation 
+    ? `${fromLocation.pathname}${fromLocation.search || ''}${fromLocation.hash || ''}`
+    : (redirectQuery || '/teacher');
 
   return (
     <Routes>
@@ -340,9 +355,9 @@ function AppContent() {
         path="/login" 
         element={
           role === 'teacher' ? (
-            <Navigate to="/teacher" replace />
+            <Navigate to={teacherRedirectTarget} replace />
           ) : role === 'student' && activeStudentId ? (
-            <Navigate to={`/student/${activeStudentId}`} replace />
+            <Navigate to={fromLocation ? `${fromLocation.pathname}${fromLocation.search || ''}` : `/student/${activeStudentId}`} replace />
           ) : (
             <Login 
               onStudentLogin={handleStudentLoginAttempt} 
@@ -356,7 +371,7 @@ function AppContent() {
         path="/teacher" 
         element={
           role !== 'teacher' ? (
-            <Navigate to="/login" replace />
+            <Navigate to="/login" state={{ from: location }} replace />
           ) : (
             <StudentManagementDashboard 
               students={processedStudents}
@@ -419,7 +434,7 @@ function AppContent() {
         path="/mypage" 
         element={
           role === 'guest' ? (
-            <Navigate to="/login" replace />
+            <Navigate to="/login" state={{ from: location }} replace />
           ) : (
             <MyPage 
               role={role}
