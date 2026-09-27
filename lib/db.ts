@@ -238,5 +238,100 @@ export const getCollectionCount = async (collectionName: string): Promise<number
   }
 };
 
+export interface QuickRecordState {
+  manualCheckList: string[];
+  submitSequence: { studentId: string; name: string }[];
+  sortBy: 'name' | 'submit';
+  updatedAt?: string;
+}
+
+// [선생님용] 날짜별 퀵 기록 상태 저장 (localStorage + Firestore)
+export const saveQuickRecordState = async (
+  email: string | null | undefined,
+  date: string,
+  state: QuickRecordState
+) => {
+  const targetEmail = email || 'hdsk1234@naver.com';
+  try {
+    localStorage.setItem(`quick_record_${date}`, JSON.stringify(state));
+  } catch (e) {
+    console.warn("LocalStorage save error:", e);
+  }
+
+  try {
+    const teacherDocRef = doc(db, TEACHERS_COLLECTION, targetEmail);
+    await setDoc(teacherDocRef, {
+      quickRecords: {
+        [date]: {
+          ...sanitizeData(state),
+          updatedAt: new Date().toISOString()
+        }
+      }
+    }, { merge: true });
+  } catch (e) {
+    console.error("Firestore quickRecords save error:", e);
+  }
+};
+
+// [선생님용] 날짜별 퀵 기록 상태 삭제
+export const deleteQuickRecordState = async (
+  email: string | null | undefined,
+  date: string
+) => {
+  const targetEmail = email || 'hdsk1234@naver.com';
+  try {
+    localStorage.removeItem(`quick_record_${date}`);
+  } catch (e) {}
+
+  try {
+    const teacherDocRef = doc(db, TEACHERS_COLLECTION, targetEmail);
+    await setDoc(teacherDocRef, {
+      quickRecords: {
+        [date]: null
+      }
+    }, { merge: true });
+  } catch (e) {
+    console.error("Firestore quickRecords delete error:", e);
+  }
+};
+
+// [선생님용] 날짜별 퀵 기록 실시간 구독
+export const subscribeToQuickRecordState = (
+  email: string | null | undefined,
+  date: string,
+  callback: (state: QuickRecordState | null) => void
+) => {
+  const targetEmail = email || 'hdsk1234@naver.com';
+  const teacherDocRef = doc(db, TEACHERS_COLLECTION, targetEmail);
+  return onSnapshot(teacherDocRef, (docSnap) => {
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+      const record = data.quickRecords?.[date];
+      if (record) {
+        callback(record as QuickRecordState);
+        return;
+      }
+    }
+    const local = localStorage.getItem(`quick_record_${date}`);
+    if (local) {
+      try {
+        callback(JSON.parse(local));
+        return;
+      } catch (e) {}
+    }
+    callback(null);
+  }, (err) => {
+    console.error("QuickRecordState subscription error:", err);
+    const local = localStorage.getItem(`quick_record_${date}`);
+    if (local) {
+      try {
+        callback(JSON.parse(local));
+        return;
+      } catch (e) {}
+    }
+    callback(null);
+  });
+};
+
 
 

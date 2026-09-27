@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StudentData, HomeworkType } from '../types';
 import { Calendar, CheckCircle2, Circle, AlertCircle, Play, Trash2, X } from 'lucide-react';
+import { saveQuickRecordState, deleteQuickRecordState, subscribeToQuickRecordState } from '../lib/db';
 
 interface Props {
   students: StudentData[];
@@ -25,9 +26,22 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
   const [showUndoToast, setShowUndoToast] = useState(false);
   const [undoTargetDate, setUndoTargetDate] = useState('');
 
+  // 날짜별 퀵 기록 상태(미완성 학생 명단, 제출 순서, 정렬 방식) 구독 및 복원
   useEffect(() => {
-    setSubmitSequence([]);
-  }, [selectedDate]);
+    const unsubscribe = subscribeToQuickRecordState(currentUserEmail, selectedDate, (savedState) => {
+      if (savedState) {
+        setManualCheckList(savedState.manualCheckList || []);
+        setSubmitSequence(savedState.submitSequence || []);
+        setSortBy(savedState.sortBy || 'name');
+      } else {
+        setManualCheckList([]);
+        setSubmitSequence([]);
+        setSortBy('name');
+      }
+    });
+
+    return () => unsubscribe();
+  }, [selectedDate, currentUserEmail]);
 
   const today = new Date();
   const todayMidnight = new Date(today);
@@ -63,6 +77,8 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
 
     setManualCheckList([]); // 수동 확인 리스트 비우기
     setSubmitSequence([]);  // 제출 순서 리스트 비우기
+    setSortBy('name');
+    deleteQuickRecordState(currentUserEmail, selectedDate);
 
     setTimeout(() => {
       window.alert("성공적으로 삭제되었습니다.");
@@ -83,6 +99,11 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
 
     setManualCheckList(undoManualCheckList);
     setSubmitSequence(undoSubmitSequence);
+    saveQuickRecordState(currentUserEmail, undoTargetDate, {
+      manualCheckList: undoManualCheckList,
+      submitSequence: undoSubmitSequence,
+      sortBy: 'submit'
+    });
 
     setUndoBackup(null);
     setUndoManualCheckList([]);
@@ -191,6 +212,24 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     setSortBy('submit'); // 파싱 완료 시 자동으로 제출순 정렬로 변경
     setManualCheckList(newManualList);
     setRawData('');
+
+    saveQuickRecordState(currentUserEmail, selectedDate, {
+      manualCheckList: newManualList,
+      submitSequence: newSubmitSequence,
+      sortBy: 'submit'
+    });
+  };
+
+  const handleRemoveFromManualCheck = (studentId: string) => {
+    if (manualCheckList.includes(studentId)) {
+      const nextList = manualCheckList.filter(id => id !== studentId);
+      setManualCheckList(nextList);
+      saveQuickRecordState(currentUserEmail, selectedDate, {
+        manualCheckList: nextList,
+        submitSequence,
+        sortBy
+      });
+    }
   };
 
   const handleToggleHomework = (student: StudentData, type: HomeworkType) => {
@@ -224,11 +263,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     }
 
     onUpdateStudent({ ...student, homework: newHomework });
-    
-    // 수동 조작 시 매뉴얼 체크 리스트에서 해제
-    if (manualCheckList.includes(student.id)) {
-      setManualCheckList(prev => prev.filter(id => id !== student.id));
-    }
+    handleRemoveFromManualCheck(student.id);
   };
 
   const handleUpdateExplanation = (student: StudentData, count: number, isDirectInput: boolean = false) => {
@@ -268,11 +303,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     }
 
     onUpdateStudent({ ...student, homework: newHomework });
-
-    // 수동 조작 시 매뉴얼 체크 리스트에서 해제
-    if (manualCheckList.includes(student.id)) {
-      setManualCheckList(prev => prev.filter(id => id !== student.id));
-    }
+    handleRemoveFromManualCheck(student.id);
   };
 
   const getTaskStatus = (student: StudentData, type: HomeworkType) => {
@@ -330,11 +361,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
     }
 
     onUpdateStudent({ ...student, homework: newHomework });
-
-    // 수동 조작 시 매뉴얼 체크 리스트에서 해제
-    if (manualCheckList.includes(student.id)) {
-      setManualCheckList(prev => prev.filter(id => id !== student.id));
-    }
+    handleRemoveFromManualCheck(student.id);
   };
 
   const activeStudents = students.filter(student => {
@@ -389,6 +416,15 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
       }));
   }
 
+  const handleSortChange = (newSort: 'name' | 'submit') => {
+    setSortBy(newSort);
+    saveQuickRecordState(currentUserEmail, selectedDate, {
+      manualCheckList,
+      submitSequence,
+      sortBy: newSort
+    });
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-4 space-y-4">
       <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex flex-col gap-3 sticky top-0 z-30">
@@ -403,7 +439,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
           />
           <div className="flex bg-gray-100 p-0.5 rounded-lg border border-gray-200">
             <button
-              onClick={() => setSortBy('name')}
+              onClick={() => handleSortChange('name')}
               className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
                 sortBy === 'name'
                   ? 'bg-white text-gray-900 shadow-sm'
@@ -413,7 +449,7 @@ export const QuickUpdateDashboard: React.FC<Props> = ({ students, onUpdateStuden
               가나다순
             </button>
             <button
-              onClick={() => setSortBy('submit')}
+              onClick={() => handleSortChange('submit')}
               className={`px-3 py-1 rounded-md text-xs font-bold transition-all ${
                 sortBy === 'submit'
                   ? 'bg-white text-indigo-600 shadow-sm'

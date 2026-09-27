@@ -70,3 +70,7 @@ functions/.env
 
 # dataconnect generated files
 .dataconnect
+
+# Local Kakao automation
+kakao_automation/
+
